@@ -911,7 +911,7 @@ a {
  화면: V.home / V.timer / V.an / V.game 이 각 탭을 그림, render()가 전체를 다시 그림
  수정 지점: PETS(성장 단계) · LK(외부 링크) · HQ(역사 퀴즈) · DECKS(암기 카드) · SN(알람음)
  AI 도우미 탭: aiPage / aiSend / histHTML (대화 기록은 D.chats), 로비의 AI 브리핑: brief / follow
- AI·랭킹은 공유 링크(claude.ai)에서만 동작, 내 컴퓨터에서 열면 AI/랭킹만 꺼지고 나머지는 동작 */
+ AI 채팅은 서버의 OpenAI API를 사용해요. HTML 파일을 직접 열면 API 연결은 작동하지 않아요 */
 const $ = (s) => document.querySelector(s);
 const esc = (s) =>
   String(s).replace(
@@ -1278,27 +1278,12 @@ function rkHTML() {
   ).join("");
 }
 async function initDb() {
-  try {
-    const db = await claude.use("db"),
-      us = await claude.use("user");
-    if (!db || !us) return;
-    dbR = db;
-    myId = await us.id();
-    if (!myId) {
-      dbR = null;
-      return;
-    }
-    db.collection("rank").onSnapshot(
-      (s) => {
-        RK = s.docs.map((d) => ({ id: d.id, ...d.data() }));
-        const r = $("#rk");
-        if (r) r.innerHTML = rkHTML();
-      },
-      () => {},
-    );
-    sync(D && D.run ? 1 : 0);
-  } catch (e) {}
+  // 순위 공유 기능은 별도 데이터베이스가 연결되어 있지 않으면 비활성화해요.
+  dbR = null;
+  const r = $("#rk");
+  if (r) r.innerHTML = rkHTML();
 }
+
 setInterval(() => {
   if (!D) return;
   if (D.run) {
@@ -1712,7 +1697,7 @@ const FQ = [
   },
 ];
 /* ===== [/AI-DATA] ===== */
-/* ===== [AI-ENGINE] 분석 · 계획 만들기 : 인터넷·Claude 없이 동작 ===== */
+/* ===== [AI-ENGINE] 분석 · 계획 만들기 ===== */
 const subjKey = (n) =>
   /수학/.test(n)
     ? "수학"
@@ -1882,61 +1867,6 @@ function analyze() {
     if (e && e.scrollIntoView) e.scrollIntoView({ behavior: "smooth" });
   }, 60);
 }
-/* 내장 질문 답변 : 키워드로 위 자료에서 찾아 보여줘요 */
-function kbAnswer(q, study) {
-  q = q.toLowerCase();
-  const r = [],
-    sc = (k) => k.split(" ").filter((w) => w && q.includes(w)).length;
-  Object.values(M).forEach((m) => {
-    const v = sc(m.k) + (q.includes(m.n) ? 3 : 0);
-    if (v)
-      r.push([
-        v * 2,
-        `${m.n}\n${m.h}\n\n왜 효과가 있나요? ${m.w}${m.m ? `\n권장: 하루 ${m.m}분 안팎` : ""}`,
-      ]);
-  });
-  Object.keys(SB).forEach((k) => {
-    if (k != "기본" && q.includes(k))
-      r.push([
-        5,
-        `${k} 공부 팁\n${SB[k].tips.map((x) => "· " + x).join("\n")}`,
-      ]);
-  });
-  HB.forEach((h) => {
-    if (h.r.test(q)) r.push([3, h.a]);
-  });
-  FQ.forEach((f) => {
-    const v = sc(f.k);
-    if (v) r.push([v * 3 + 2, f.a]);
-  });
-  if (/시험.{0,4}(전|앞)|일주일|직전|총정리/.test(q))
-    r.push([4, PH.map((x) => `${x[1]}: ${x[2]}`).join("\n")]);
-  if (/계획|할 일|오늘/.test(q) && D.plan.length)
-    r.push([
-      5,
-      "아직 안 한 계획\n" +
-        (D.plan
-          .filter((p) => !p.d)
-          .slice(0, 4)
-          .map((p) => "· " + p.t)
-          .join("\n") || "모두 끝냈어요!"),
-    ]);
-  if (/약점|분석|부족|우선/.test(q) && D.sum)
-    r.push([5, "내 분석 요약\n" + D.sum]);
-  r.sort((a, b) => b[0] - a[0]);
-  const pre = study
-    ? ""
-    : "내장 엔진은 공부 질문만 답해요. 자유롭게 대화하려면 답변 엔진을 Claude로 바꿔 주세요.\n\n";
-  return (
-    pre +
-    (r.length
-      ? r
-          .slice(0, 2)
-          .map((x) => x[1])
-          .join("\n\n———\n\n")
-      : "내장 자료에서 찾지 못했어요. 이렇게 물어보세요.\n· 암기 잘하는 법\n· 수학 공부법\n· 집중이 안 돼요\n· 시험 일주일 전에 뭐 해?")
-  );
-}
 /* ===== [/AI-ENGINE] ===== */
 const LK = [
   [
@@ -1980,21 +1910,11 @@ const LK = [
 function linksHTML() {
   return `<div class="card"><h3>1. 외부 사이트에서 능력 확인하기</h3><p class="lt" style="margin:4px 0 0">누르면 새 탭에서 열려요. 해 본 뒤 결과를 아래에 적어 주세요.</p>${LK.map((g) => `<p class="lt"><b style="color:var(--tx)">${g[0]}</b></p>${g[1].map((l) => `<a class="lk" href="${l[2]}" target="_blank" rel="noopener"><span>${l[0]}<small>${l[1]}</small></span>${svg("out", 18)}</a>`).join("")}`).join("")}</div>`;
 }
-async function getSample() {
-  try {
-    return await claude.use("sample");
-  } catch (e) {
-    return null;
-  }
-}
+
 /* ===== AI 도우미 탭 : 대화 기록 · 새 대화 · 공부 모드 on/off ===== */
-const AIS = {
-  study:
-    "너는 학생의 공부를 돕는 학습 도우미야. 학교 공부, 시험, 학습법, 진로처럼 공부와 관련된 질문에만 답해. 공부와 관련 없는 질문은 정중하게 거절하고, 공부와 연결해서 도울 수 있는 방향을 한 줄로 제안해. 한국어로 쉽고 정확하게 설명하고, 확실하지 않은 내용은 모른다고 말해.",
-  free: "너는 친절한 AI 어시스턴트야. 주제 제한 없이 자유롭게 대화해. 사용자가 쓰는 언어로 답하고, 확실하지 않은 내용은 모른다고 말해.",
-};
+
 let AI = { v: "chat", cur: null, busy: 0, ctl: null };
-const aiSet = () => (D.ai = D.ai || { study: true, tier: "default" });
+const aiSet = () => { D.ai = D.ai || { study: true, tier: "default" }; D.ai.eng = "api"; return D.ai; };
 const chats = () => (D.chats = D.chats || []);
 const curChat = () => chats().find((c) => c.id == AI.cur);
 function coachHTML() {
@@ -2028,7 +1948,7 @@ function aiPage() {
       )
       .join(
         "",
-      )}</select></label><label class="sw"><span><b>답변 엔진</b><small>실제 AI를 쓰려면 서버를 실행해야 해요</small></span><select onchange="aiSet().eng=this.value;save();render()"><option value="api" ${(s.eng || "api") == "api" ? "selected" : ""}>OpenAI API (실제 AI)</option><option value="local" ${s.eng == "local" ? "selected" : ""}>내장 답변</option><option value="claude" ${s.eng == "claude" ? "selected" : ""}>Claude (공유 환경)</option></select></label><p class="lt">실제 AI를 사용하려면 서버와 API 키 설정이 필요해요. 온라인에 배포한 사이트는 링크로 접속하면 사용할 수 있고, HTML 파일을 직접 더블클릭하면 API 연결이 작동하지 않아요.</p></div>
+      )}</select></label><div class="lt" style="padding:10px 0">답변은 OpenAI API로 제공돼요. API 키는 서버에 안전하게 보관되며, 실제 AI를 사용하려면 Render의 환경 변수에 <code>OPENAI_API_KEY</code>가 등록되어 있어야 해요.</div></div>
  <div id="chat">${chatHTML()}</div><div class="chatbar"><div class="ask"><textarea id="cq" rows="1" aria-label="메시지 입력" placeholder="${s.study ? "공부하다 궁금한 걸 물어보세요" : "무엇이든 물어보세요"}" onkeydown="if(event.key=='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();aiSend()}"></textarea>${AI.busy ? `<button class="send stopb" aria-label="멈추기" onclick="aiStop()">■</button>` : `<button class="send" aria-label="보내기" onclick="aiSend()">${svg("send", 20)}</button>`}</div></div>`
   );
 }
@@ -2084,8 +2004,6 @@ async function aiSend(t) {
   const el = $("#cq");
   t = (t || (el ? el.value : "")).trim();
   if (!t || AI.busy) return;
-  const engine = aiSet().eng || "api";
-  const sm = engine === "claude" ? await getSample() : null;
   let c = curChat();
   if (!c) {
     c = { id: Date.now(), t: t.slice(0, 24), ts: Date.now(), m: [] };
@@ -2099,13 +2017,6 @@ async function aiSend(t) {
   c.ts = Date.now();
   if (c.m.length > 60) c.m.splice(0, 2);
 
-  if (engine === "local") {
-    a.c = kbAnswer(t, aiSet().study);
-    save(); render();
-    window.scrollTo(0, document.body.scrollHeight);
-    return;
-  }
-
   AI.busy = 1;
   AI.ctl = new AbortController();
   render();
@@ -2116,8 +2027,7 @@ async function aiSend(t) {
     content: String(x.c || "").slice(0, 3000),
   }));
   try {
-    if (engine === "api") {
-      if (location.protocol === "file:") throw new Error("HTML 미리보기에서는 내장 답변을 선택해 주세요. 실제 AI는 Render 주소나 http://localhost:3000에서 사용할 수 있어요.");
+    {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2126,6 +2036,7 @@ async function aiSend(t) {
           messages: turns,
           studyMode: !!settings.study,
           profile: {
+            name: cur,
             traits: D.traits || {},
             tests: D.tests || {},
             exam: D.exam || {},
@@ -2138,25 +2049,8 @@ async function aiSend(t) {
         }),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || (response.status === 404 ? "AI 서버를 찾을 수 없어요. Render에서 Static Site 대신 Web Service로 배포해 주세요." : `서버 오류 (${response.status})`));
+      if (!response.ok) throw new Error(data.error || `서버 오류 (${response.status})`);
       a.c = data.reply || "답변을 받지 못했어요. 다시 시도해 주세요.";
-    } else if (engine === "claude" && sm) {
-      await sm(
-        [
-          { role: "user", content: settings.study ? AIS.study : AIS.free },
-          { role: "assistant", content: "네, 알겠어요." },
-          ...turns,
-        ],
-        {
-          signal: AI.ctl.signal,
-          modelTier: settings.tier,
-          cache: false,
-          onText: (x) => { a.c = x.text; paintChat(); },
-        },
-      );
-      if (!a.c) a.c = "답변을 받지 못했어요. 다시 시도해 주세요.";
-    } else {
-      throw new Error("Claude 연결은 공유 환경에서만 사용할 수 있어요. OpenAI API를 쓰려면 서버를 실행해 주세요.");
     }
   } catch (e) {
     if (e && e.name === "AbortError") a.c = "(응답을 중지했어요)";
