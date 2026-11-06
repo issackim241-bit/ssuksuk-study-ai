@@ -58,6 +58,26 @@ api.post(['/auth/register','/auth/login'],limit('auth',20,15*60000),wrap(async(q
  }
  const csrf=await session(q,r,user);r.status(register?201:200).json(userBody(user,csrf));
 }));
+api.post('/auth/recover', limit('recover', 12, 15 * 60000), wrap(async (q, r) => {
+ const code = typeof q.body?.code === 'string' ? q.body.code.replace(/[\s-]/g, '').toLowerCase() : '';
+ const password = q.body?.password;
+ if (!/^[a-f0-9]{32}$/.test(code)) return r.status(400).json({error:'복구 코드 32자리를 확인해 주세요.'});
+ const recoveryHash = hash(code);
+ if (password === undefined) {
+  const {rows} = await db.query('SELECT username FROM accounts WHERE recovery_hash=$1', [recoveryHash]);
+  if (!rows.length) return r.status(404).json({error:'유효한 복구 코드를 찾지 못했습니다.'});
+  return r.json({username:rows[0].username});
+ }
+ if (typeof password !== 'string' || password.length < 8 || password.length > 128) {
+  return r.status(400).json({error:'새 비밀번호를 8~128자로 입력해 주세요.'});
+ }
+ const salt = randomBytes(16).toString('hex');
+ const passwordHash = (await derive(password, salt, 64)).toString('hex');
+ const {rows} = await db.query('UPDATE accounts SET password_hash=$1,salt=$2,recovery_hash=NULL WHERE recovery_hash=$3 RETURNING id,username', [passwordHash,salt,recoveryHash]);
+ if (!rows.length) return r.status(404).json({error:'유효한 복구 코드를 찾지 못했습니다.'});
+ await db.query('DELETE FROM sessions WHERE account_id=$1', [rows[0].id]);
+ r.json({username:rows[0].username});
+}));
 api.use(wrap(async(q,r,n)=>{
  const token=String(q.headers.cookie||'').split(';').map(v=>v.trim()).find(v=>v.startsWith('study_session='))?.slice(14);
  if(!token)return r.status(401).json({error:'로그인이 필요합니다.'});
@@ -67,6 +87,20 @@ api.use(wrap(async(q,r,n)=>{
  if(q.method==='GET'&&q.get('X-CSRF-Token')!==s.csrf)return r.status(401).json({error:'다시 로그인해 주세요.'});
  q.session=s;q.user=(await db.query('SELECT * FROM accounts WHERE id=$1',[s.account_id])).rows[0];
  if(q.method!=='GET'&&q.get('X-CSRF-Token')!==s.csrf)return r.status(403).json({error:'로그인 정보를 새로고침해 주세요.'});n();
+}));
+api.post('/auth/recovery-code', limit('recovery-code', 8, 15 * 60000), wrap(async (q, r) => {
+ const password = q.body?.password;
+ if (typeof password !== 'string' || password.length < 8 || password.length > 128) {
+  return r.status(400).json({error:'현재 비밀번호를 입력해 주세요.'});
+ }
+ const candidate = await derive(password, q.user.salt, 64);
+ if (!timingSafeEqual(candidate, Buffer.from(q.user.password_hash, 'hex'))) {
+  return r.status(401).json({error:'현재 비밀번호를 확인해 주세요.'});
+ }
+ const code = randomBytes(16).toString('hex');
+ const result = await db.query('UPDATE accounts SET recovery_hash=$1 WHERE id=$2 AND password_hash=$3', [hash(code),q.user.id,q.user.password_hash]);
+ if (!result.rowCount) return r.status(409).json({error:'계정 정보가 바뀌었습니다. 다시 로그인해 주세요.'});
+ r.json({code:code.match(/.{4}/g).join('-')});
 }));
 api.get('/me',(q,r)=>r.json(userBody(q.user,q.session.csrf)));
 api.post('/auth/logout',wrap(async(q,r)=>{await db.query('DELETE FROM sessions WHERE token_hash=$1',[q.session.token_hash]);r.clearCookie('study_session',{httpOnly:true,secure,sameSite:'lax',path:'/'});r.json({ok:true});}));

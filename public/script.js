@@ -74,8 +74,124 @@ const add = (n) => {
 const stage = () => ST.filter((v) => D.pts >= v).length - 1;
 
 /* 로그인 */
+const rememberedAccountsKey = 'ssuksuk.remembered-accounts';
+let selectedLogin = '';
+
+function rememberedAccounts() {
+  try {
+    const accounts = JSON.parse(localStorage.getItem(rememberedAccountsKey) || '[]');
+    if (!Array.isArray(accounts)) return [];
+    return accounts.filter(a => typeof a?.name === 'string' && typeof a.username === 'string' && /^[a-z0-9_-]{3,24}$/.test(a.username)).slice(0, 8);
+  } catch { return []; }
+}
+
+function saveRememberedAccounts(accounts) {
+  try { localStorage.setItem(rememberedAccountsKey, JSON.stringify(accounts.slice(0, 8))); } catch {}
+}
+
+function chooseRememberedAccount(username) {
+  selectedLogin = username;
+  authMode = 'login';
+  render();
+  $('#pw')?.focus();
+}
+
+function forgetRememberedAccount(username) {
+  saveRememberedAccounts(rememberedAccounts().filter(a => a.username !== username));
+  if (selectedLogin === username) selectedLogin = '';
+  render();
+}
+
+function accountChoicesHTML() {
+  const accounts = rememberedAccounts();
+  if (!accounts.length) return '';
+  return `<section class="remembered-accounts"><h3>계정 선택</h3>
+    ${accounts.map(a => `<div class="remembered-account">
+      <button type="button" class="s" data-username="${esc(a.username)}" onclick="chooseRememberedAccount(this.dataset.username)">
+        <strong>${esc(a.name)}</strong><small>@${esc(a.username)}</small>
+      </button>
+      <button type="button" class="text-btn" data-username="${esc(a.username)}" aria-label="${esc(a.username)} 목록에서 삭제" onclick="forgetRememberedAccount(this.dataset.username)">삭제</button>
+    </div>`).join('')}
+    <button type="button" class="text-btn" onclick="chooseRememberedAccount('');$('#nm').focus()">다른 계정 사용</button>
+    <p class="lt">이 브라우저에 닉네임과 아이디를 기억합니다.</p>
+  </section>`;
+}
+
+function recoveryHTML() {
+  return `<main class="auth-page"><a class="wordmark" href="/">쑥쑥<span>스터디</span></a>
+    <form class="card auth-form" onsubmit="event.preventDefault();recoverAccount(event.submitter?.value==='reset')">
+      <h2>아이디 · 비밀번호 찾기</h2>
+      <p class="lt">로그인한 상태에서 발급해 둔 복구 코드를 입력하세요. 비밀번호를 바꾸면 사용한 코드는 만료됩니다.</p>
+      <label>복구 코드<input id="recoveryInput" required maxlength="48" autocomplete="off" spellcheck="false"></label>
+      <button type="submit" value="lookup" class="s">아이디 확인</button>
+      <label>새 비밀번호<input id="recoveryPassword" type="password" maxlength="128" autocomplete="new-password" placeholder="재설정할 때만 입력 · 8자 이상"></label>
+      <button type="submit" value="reset" class="w">비밀번호 재설정</button>
+      <p id="recoveryResult" role="status"></p>
+      <button type="button" class="text-btn" onclick="authMode='login';render()">로그인으로 돌아가기</button>
+    </form></main>`;
+}
+
+async function recoverAccount(reset) {
+  const result = $('#recoveryResult');
+  const buttons = result.closest('form').querySelectorAll('button[type="submit"]');
+  const body = {code:$('#recoveryInput').value};
+  if (reset) {
+    body.password = $('#recoveryPassword').value;
+    if (body.password.length < 8) { result.textContent = '새 비밀번호를 8자 이상 입력해 주세요.'; return; }
+  }
+  buttons.forEach(button => button.disabled = true);
+  try {
+    const {username} = await api('/auth/recover',{method:'POST',body:JSON.stringify(body)});
+    selectedLogin = username;
+    result.textContent = reset ? `아이디는 ${username}입니다. 새 비밀번호로 로그인하세요.` : `아이디는 ${username}입니다.`;
+    if (reset) {
+      $('#recoveryInput').value = '';
+      $('#recoveryPassword').value = '';
+    }
+  } catch (error) {
+    result.textContent = error.message;
+  } finally {
+    buttons.forEach(button => button.disabled = false);
+  }
+}
+
+function openRecoverySettings() {
+  if ($('#recoveryDialog')) return;
+  const dialog = document.createElement('dialog');
+  dialog.id = 'recoveryDialog';
+  dialog.className = 'card recovery-dialog';
+  dialog.innerHTML = `<form><h2>복구 코드 발급</h2>
+    <p class="lt">코드는 아이디 찾기와 비밀번호 재설정에 사용합니다. 새 코드를 발급하면 이전 코드는 만료됩니다.</p>
+    <label>현재 비밀번호<input type="password" autocomplete="current-password" minlength="8" maxlength="128" required></label>
+    <button type="submit">코드 발급</button><p role="status"></p>
+    <button type="button" class="s">닫기</button></form>`;
+  const password = dialog.querySelector('input');
+  const message = dialog.querySelector('[role="status"]');
+  const submit = dialog.querySelector('[type="submit"]');
+  dialog.querySelector('[type="button"]').onclick = () => dialog.close();
+  dialog.addEventListener('close', () => dialog.remove(), {once:true});
+  dialog.querySelector('form').onsubmit = async event => {
+    event.preventDefault();
+    submit.disabled = true;
+    try {
+      const {code} = await api('/auth/recovery-code',{method:'POST',body:JSON.stringify({password:password.value})});
+      password.value = '';
+      const output = document.createElement('code');
+      output.textContent = code;
+      message.replaceChildren('이 코드를 안전한 곳에 따로 저장하세요.', document.createElement('br'), output);
+      submit.hidden = true;
+    } catch (error) {
+      message.textContent = error.message;
+      submit.disabled = false;
+    }
+  };
+  document.body.append(dialog);
+  dialog.showModal();
+}
+
 function loginHTML(m = '') {
-  return `<main class="auth-page"><a class="wordmark" href="/">쑥쑥<span>스터디</span></a><div class="auth-intro"><span class="eyebrow">나의 공부, 한곳에.</span><h1>공부의 흐름을<br>이어 가는 곳.</h1><p>계획하고, 집중하고, 짧게 복습하세요.<br>기록은 로그인한 계정에 남습니다.</p></div><form class="card auth-form" onsubmit="event.preventDefault();login()"><div class="auth-tabs"><button type="button" class="${authMode==='login'?'active':''}" onclick="authMode='login';render()">로그인</button><button type="button" class="${authMode==='register'?'active':''}" onclick="authMode='register';render()">회원가입</button></div>${authMode==='register'?'<label>닉네임<input id="dn" maxlength="24" autocomplete="nickname" placeholder="앱에서 부를 이름"></label>':''}<label>아이디<input id="nm" required minlength="3" maxlength="24" autocomplete="username" placeholder="영문·숫자 3~24자"></label><label>비밀번호<input id="pw" required type="password" minlength="8" maxlength="128" autocomplete="${authMode==='register'?'new-password':'current-password'}" placeholder="8자 이상"></label><button class="w" id="loginBtn" type="submit">${authMode==='register'?'계정 만들기':'로그인'}</button><p class="no" id="lm" role="alert">${esc(m)}</p><p class="lt">비밀번호는 암호화된 해시로 보관합니다. 질문과 일부 학습 정보는 AI 답변을 위해 OpenAI로 전송됩니다.</p></form></main>`;
+  if (authMode === 'recover') return recoveryHTML();
+  return `<main class="auth-page"><a class="wordmark" href="/">쑥쑥<span>스터디</span></a><div class="auth-intro"><span class="eyebrow">나의 공부, 한곳에.</span><h1>공부의 흐름을<br>이어 가는 곳.</h1><p>계획하고, 집중하고, 짧게 복습하세요.<br>기록은 로그인한 계정에 남습니다.</p></div><form class="card auth-form" onsubmit="event.preventDefault();login()"><div class="auth-tabs"><button type="button" class="${authMode==='login'?'active':''}" onclick="authMode='login';render()">로그인</button><button type="button" class="${authMode==='register'?'active':''}" onclick="authMode='register';render()">회원가입</button></div>${authMode==='login'?accountChoicesHTML():''}${authMode==='register'?'<label>닉네임<input id="dn" maxlength="24" autocomplete="nickname" placeholder="앱에서 부를 이름"></label>':''}<label>아이디<input id="nm" required minlength="3" maxlength="24" autocomplete="username" value="${authMode==='login'?esc(selectedLogin):''}" placeholder="영문·숫자 3~24자"></label><label>비밀번호<input id="pw" required type="password" minlength="8" maxlength="128" autocomplete="${authMode==='register'?'new-password':'current-password'}" placeholder="8자 이상"></label><button class="w" id="loginBtn" type="submit">${authMode==='register'?'계정 만들기':'로그인'}</button>${authMode==='login'?'<button type="button" class="text-btn" onclick="authMode=\'recover\';render()">아이디 · 비밀번호 찾기</button>':''}<p class="no" id="lm" role="alert">${esc(m)}</p><p class="lt">비밀번호는 암호화된 해시로 보관합니다. 질문과 일부 학습 정보는 AI 답변을 위해 OpenAI로 전송됩니다.</p></form></main>`;
 }
 async function api(path, options = {}) {
   const response = await fetch('/api'+path, {credentials:'same-origin',...options,headers:{'Content-Type':'application/json','X-CSRF-Token':csrf,...options.headers}});
@@ -86,6 +202,9 @@ async function api(path, options = {}) {
 function loadAccount(account) {
   cur=account.name; csrf=account.csrf;revision=account.revision;D=account.state;
   try { sessionStorage.setItem(tabSessionKey, csrf); } catch {}
+  if (typeof account.username === 'string') {
+    saveRememberedAccounts([{username:account.username,name:account.name}, ...rememberedAccounts().filter(a => a.username !== account.username)]);
+  }
   U={};U[cur]={d:D};D.notes ||= [];D.gameHistory ||= [];
   savePending=false;conflict=false;syncMessage='서버 저장됨';
   if(!D.att.includes(today())){D.att.push(today());D.pts+=10;save();}
@@ -93,7 +212,11 @@ function loadAccount(account) {
 }
 async function login() {
   const button=$('#loginBtn');button.disabled=true;
-  try {loadAccount(await api('/auth/'+authMode,{method:'POST',body:JSON.stringify({username:$('#nm').value.trim(),password:$('#pw').value,name:$('#dn')?.value.trim()})}));}
+  try {
+    const mode = authMode;
+    loadAccount(await api('/auth/'+mode,{method:'POST',body:JSON.stringify({username:$('#nm').value.trim(),password:$('#pw').value,name:$('#dn')?.value.trim()})}));
+    if (mode === 'register') openRecoverySettings();
+  }
   catch(e){$('#lm').textContent=e.message;button.disabled=false;}
 }
 function updateSync(){for(const selector of ['#syncStatus','#accountSync']){const el=$(selector);if(el){el.textContent=syncMessage;el.classList.toggle('sync-error',conflict||syncMessage.includes('실패'));}}}
@@ -112,7 +235,7 @@ async function logout(){
  if(saving){toast('저장 중입니다. 잠시 후 다시 눌러 주세요.');return;}
  if(D?.run)stopT();
  if(!await flushSave()){toast('저장되지 않은 기록이 있습니다. 내 기록을 내려받은 뒤 다시 시도해 주세요.');return;}
- try{await api('/auth/logout',{method:'POST'});try { sessionStorage.removeItem(tabSessionKey); } catch {} D=null;cur=null;csrf='';tab='home';clearTimeout(saveTimer);render();}
+ try{await api('/auth/logout',{method:'POST'});try { sessionStorage.removeItem(tabSessionKey); } catch {} AI.ctl?.abort();AI={v:'chat',cur:null,busy:0,ctl:null};U={};D=null;cur=null;csrf='';selectedLogin='';authMode='login';tab='home';clearTimeout(saveTimer);render();}
  catch(e){toast(e.message);}
 }
 function downloadRecords(){
@@ -1119,6 +1242,7 @@ async function aiSend(t) {
   const el = $("#cq");
   t = (t || (el ? el.value : "")).trim();
   if (!t || AI.busy) return;
+  const accountState = D;
   let c = curChat();
   if (!c) {
     c = { id: Date.now(), t: t.slice(0, 24), ts: Date.now(), m: [] };
@@ -1171,6 +1295,7 @@ async function aiSend(t) {
     if (e && e.name === "AbortError") a.c = "(응답을 중지했어요)";
     else a.c = "AI 연결에 실패했어요. " + (e && e.message ? e.message : "서버 실행 상태와 API 설정을 확인해 주세요.");
   }
+  if (D !== accountState) return;
   AI.busy = 0;
   AI.ctl = null;
   save();
@@ -1181,6 +1306,7 @@ async function generateAIPlan() {
   const status = $("#aiPlanStatus");
   const button = $("#aiPlanBtn");
   if (!D) return;
+  const accountState = D;
   if (!D.analysisDone) {
     if (status) status.textContent = "먼저 학습 정보를 입력하고 '분석하고 계획 만들기'를 눌러 주세요.";
     return;
@@ -1220,6 +1346,7 @@ async function generateAIPlan() {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "AI 요청에 실패했어요.");
+    if (D !== accountState) return;
     D.aiPlanText = String(data.reply || "계획을 만들지 못했어요.").slice(0, 9000);
     D.aiPlanDate = today();
     save();

@@ -24,5 +24,14 @@ export async function openStore() {
   }
   await query(`CREATE TABLE IF NOT EXISTS accounts (id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL, display_name TEXT NOT NULL, password_hash TEXT NOT NULL, salt TEXT NOT NULL, state TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 0)`);
   await query(`CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE, csrf TEXT NOT NULL, expires BIGINT NOT NULL)`);
+  if (kind === 'postgres') {
+    await query('ALTER TABLE accounts ADD COLUMN IF NOT EXISTS recovery_hash TEXT');
+  } else {
+    const {rows} = await query("SELECT name FROM pragma_table_info('accounts')");
+    if (!rows.some(column => column.name === 'recovery_hash')) {
+      await query('ALTER TABLE accounts ADD COLUMN recovery_hash TEXT');
+    }
+  }
+  await query('CREATE UNIQUE INDEX IF NOT EXISTS accounts_recovery_hash ON accounts(recovery_hash)');
   return {query,close,kind};
 }

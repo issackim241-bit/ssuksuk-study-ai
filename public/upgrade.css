@@ -15,3 +15,11 @@ nav{box-shadow:none;backdrop-filter:none}nav svg{margin-bottom:0}.memory-number{
 
 .focus-banner h2{word-break:keep-all}.growth-row>span{display:flex;align-items:center}.account-panel .text-btn{word-break:keep-all}
 @media(max-width:600px){.focus-banner h2{font-size:21px}.clock-art{width:96px;height:96px}.focus-banner{gap:8px}}
+
+.remembered-accounts { margin: 1rem 0; }
+.remembered-account { display: flex; align-items: center; gap: .5rem; margin: .5rem 0; }
+.remembered-account .s { flex: 1; text-align: left; min-width: 0; overflow-wrap: anywhere; }
+.remembered-account small { display: block; }
+.recovery-dialog { width: min(420px, calc(100% - 2rem)); margin: auto; }
+.recovery-dialog::backdrop { background: #1c293f88; }
+.recovery-dialog code { overflow-wrap: anywhere; user-select: all; }
