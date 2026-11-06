@@ -1,12 +1,18 @@
+# 기존 Render Web Service를 쓰는 경우 README의 수동 배포 절차를 따르세요.
+# 이 Blueprint는 DATABASE_URL 값을 직접 입력받습니다. 데이터베이스를 자동 결제하지 않습니다.
 services:
   - type: web
-    name: ssuksuk-study-ai
+    name: ssuksuk-study
     runtime: node
     plan: free
-    buildCommand: npm ci
+    buildCommand: npm ci --omit=dev
     startCommand: npm start
     healthCheckPath: /health
     envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_MODEL
