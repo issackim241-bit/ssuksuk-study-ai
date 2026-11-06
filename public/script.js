@@ -17,6 +17,7 @@ let U = {},
   tab = "home",
   ti = null,
   G = { m: "" };
+const tabSessionKey = 'ssuksuk.tab-session';
 let csrf = '', revision = 0, saveTimer, savePending = false, saving = false, conflict = false;
 let syncMessage = '연결 중', authMode = 'login';
 const save = () => {
@@ -84,6 +85,7 @@ async function api(path, options = {}) {
 }
 function loadAccount(account) {
   cur=account.name; csrf=account.csrf;revision=account.revision;D=account.state;
+  try { sessionStorage.setItem(tabSessionKey, csrf); } catch {}
   U={};U[cur]={d:D};D.notes ||= [];D.gameHistory ||= [];
   savePending=false;conflict=false;syncMessage='서버 저장됨';
   if(!D.att.includes(today())){D.att.push(today());D.pts+=10;save();}
@@ -110,7 +112,7 @@ async function logout(){
  if(saving){toast('저장 중입니다. 잠시 후 다시 눌러 주세요.');return;}
  if(D?.run)stopT();
  if(!await flushSave()){toast('저장되지 않은 기록이 있습니다. 내 기록을 내려받은 뒤 다시 시도해 주세요.');return;}
- try{await api('/auth/logout',{method:'POST'});D=null;cur=null;csrf='';tab='home';clearTimeout(saveTimer);render();}
+ try{await api('/auth/logout',{method:'POST'});try { sessionStorage.removeItem(tabSessionKey); } catch {} D=null;cur=null;csrf='';tab='home';clearTimeout(saveTimer);render();}
  catch(e){toast(e.message);}
 }
 function downloadRecords(){
@@ -1568,6 +1570,8 @@ initDb();
 /* ===== JavaScript 기능 끝 ===== */
 
 async function boot(){
+ try { csrf = sessionStorage.getItem(tabSessionKey) || ''; } catch {}
+ if (!csrf) { render(); return; }
  $('#app').innerHTML='<main class="auth-page"><h2>공부 기록을 불러오는 중…</h2></main>';
- try{loadAccount(await api('/me'));}catch(e){render();if(e.status!==401){const el=$('#lm');if(el)el.textContent=e.message;}}
+ try{loadAccount(await api('/me'));}catch(e){if(e.status===401){csrf='';try { sessionStorage.removeItem(tabSessionKey); } catch {}}render();if(e.status!==401){const el=$('#lm');if(el)el.textContent=e.message;}}
 }
