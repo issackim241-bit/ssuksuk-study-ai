@@ -31,7 +31,7 @@ function limit(prefix,max,ms){return(q,r,n)=>{
  if(++v.count>max)return r.status(429).json({error:'요청이 많습니다. 잠시 후 다시 시도해 주세요.'});windows.set(key,v);n();
 };}
 const initial=()=>({pts:0,att:[],logs:{},run:null,pet:'tree',subs:['국어','수학','영어','과학','사회'],traits:{habit:'',good:'',weak:''},tests:{mem:'',sol:'',thk:''},exam:{date:'',hrs:2},plan:[],cards:[],notes:[],gameHistory:[]});
-const cookie=(r,token)=>r.cookie('study_session',token,{httpOnly:true,secure,sameSite:'lax',path:'/',maxAge:7*86400000});
+const cookie=(r,token)=>r.cookie('study_session',token,{httpOnly:true,secure,sameSite:'lax',path:'/'});
 async function session(q,r,user){
  const token=randomBytes(32).toString('hex'),csrf=randomBytes(24).toString('hex');
  await db.query('DELETE FROM sessions WHERE expires < $1',[Date.now()]);
@@ -63,6 +63,8 @@ api.use(wrap(async(q,r,n)=>{
  if(!token)return r.status(401).json({error:'로그인이 필요합니다.'});
  const s=(await db.query('SELECT * FROM sessions WHERE token_hash=$1 AND expires>$2',[hash(token),Date.now()])).rows[0];
  if(!s)return r.status(401).json({error:'로그인이 만료되었습니다. 다시 로그인해 주세요.'});
+ // A cookie alone cannot restore a login in a newly opened tab.
+ if(q.method==='GET'&&q.get('X-CSRF-Token')!==s.csrf)return r.status(401).json({error:'다시 로그인해 주세요.'});
  q.session=s;q.user=(await db.query('SELECT * FROM accounts WHERE id=$1',[s.account_id])).rows[0];
  if(q.method!=='GET'&&q.get('X-CSRF-Token')!==s.csrf)return r.status(403).json({error:'로그인 정보를 새로고침해 주세요.'});n();
 }));
