@@ -1,12 +1,11 @@
-/* 화면 개편과 추가 학습 활동. 기존 타이머·계획·AI·암기 카드 기능을 이어 사용합니다. */
+/* 화면 개편과 추가 학습 활동. 기존 계획·AI·암기 카드 기능을 이어 사용합니다. */
 const sectionTitle=(eyebrow,title,desc='')=>`<div class="page-heading"><p class="eyebrow">${eyebrow}</p><h1>${title}</h1>${desc?`<p class="mu">${desc}</p>`:''}</div>`;
 const gameBack=()=>'<button class="s back" onclick="go(\'game\')">← 학습 놀이터</button>';
 V.home=function(){
- const minutes=Math.floor(dayS()/60),todo=D.plan.map((p,i)=>({...p,index:i})).filter(p=>!p.d).slice(0,4);
+ const minutes=Math.floor(Object.values(D.logs || {}).reduce((total, seconds) => total + seconds, 0)/60),todo=D.plan.map((p,i)=>({...p,index:i})).filter(p=>!p.d).slice(0,4);
  const count=D.plan.filter(p=>p.d).length,stageIndex=stage(),pet=PETS[D.pet];
  return `<div class="home-title"><div><p class="eyebrow">${new Intl.DateTimeFormat('ko-KR',{month:'long',day:'numeric',weekday:'long'}).format(new Date())}</p><h1>${esc(cur)}의 공부방</h1></div><div class="avatar">${esc(cur.slice(0,1))}</div></div>
- <section class="focus-banner"><div><span class="eyebrow">지금은 집중할 시간</span><h2>딱 25분,<br>한 가지에 집중해 볼까?</h2><button onclick="GOAL=25;go('timer')">타이머 시작 ${svg('send',18)}</button></div><div class="clock-art"><span>25</span><small>MIN</small></div></section>
- <div class="stat-strip"><div><small>오늘 공부</small><b>${minutes}<em>분</em></b></div><div><small>완료한 계획</small><b>${count}<em>개</em></b></div><div><small>누적 출석</small><b>${D.att.length}<em>일</em></b></div></div>
+ <div class="stat-strip"><div><small>누적 공부</small><b>${minutes}<em>분</em></b></div><div><small>완료한 계획</small><b>${count}<em>개</em></b></div><div><small>누적 출석</small><b>${D.att.length}<em>일</em></b></div></div>
  <section class="card"><div class="ct"><h2>해야 할 일</h2><button class="text-btn" onclick="go('an')">계획 관리 →</button></div>${todo.length?todo.map(p=>`<label class="todo-line"><input type="checkbox" onchange="donePlan(${p.index})"><span>${esc(p.t)}</span></label>`).join(''):'<div class="empty-state"><p>오늘의 작은 목표를 정해 보세요.</p><button class="s" onclick="go(\'an\')">계획 만들기</button></div>'}</section>
  <section class="shortcut-grid"><button onclick="go('ai')"><span class="shortcut-icon">?</span><b>질문하기</b><small>막힌 개념을 풀어 봐요</small></button><button onclick="go('game')"><span class="shortcut-icon">＋</span><b>학습 놀이터</b><small>짧게 풀고 다시 집중</small></button><button onclick="gc()"><span class="shortcut-icon">Aa</span><b>암기 카드</b><small>오늘 배운 내용 복습</small></button></section>
  <section class="card"><div class="ct"><h2>공부 메모</h2><small class="mu">계정에 저장</small></div><form class="memo-entry" onsubmit="event.preventDefault();addNote()"><input id="memoText" maxlength="160" placeholder="잊기 전에 적어 두기"><button>추가</button></form><div class="memo-list">${(D.notes||[]).slice().reverse().map((n,i)=>`<div class="memo-item"><span>${esc(n.text)}</span><button class="icon-btn" aria-label="메모 삭제" onclick="delNote(${D.notes.length-1-i})">×</button></div>`).join('')||'<p class="mu">아직 적어 둔 메모가 없어요.</p>'}</div></section>
@@ -18,7 +17,7 @@ render=function(){
  originalRender();if(!D)return;
  document.body.dataset.page=tab;
  const header=$('header');header.innerHTML=`<a class="wordmark" href="#" onclick="event.preventDefault();go('home')">쑥쑥<span>스터디</span></a><div class="header-right"><button id="syncStatus" class="sync-status" onclick="flushSave()">${esc(syncMessage)}</button><span class="point">${D.pts} P</span></div>`;
- const nav=$('nav');nav.innerHTML=[['home','홈'],['timer','집중'],['an','계획'],['game','놀이터'],['ai','질문']].map(([key,name])=>`<button class="${tab===key?'on':''}" onclick="go('${key}')">${svg(key)}<span>${name}</span></button>`).join('');
+ const nav=$('nav');nav.innerHTML=[['home','홈'],['an','계획'],['game','놀이터'],['ai','질문']].map(([key,name])=>`<button class="${tab===key?'on':''}" onclick="go('${key}')">${svg(key)}<span>${name}</span></button>`).join('');
  if(tab==='game'&&G.m&&!['news','quiz','memory','pairs'].includes(G.m))$('main').insertAdjacentHTML('afterbegin',gameBack());
  updateSync();
 };
@@ -120,10 +119,6 @@ const oldGame=V.game;
 V.game=function(){return G.m==='quiz'?quizHTML():G.m==='memory'?memoryHTML():G.m==='pairs'?pairsHTML():G.m==='news'?newsHTML():oldGame();};
 const oldResult=result;
 result=function(){if(!G.recorded){G.recorded=true;recordGame(G.m==='hist'?'한국사 퀴즈':'암산',G.sc,G.n);}return oldResult();};
-// 한 계정의 기록을 보여 줍니다. 공개 랭킹으로 오해하지 않도록 구분합니다.
-rkHTML=function(){return `<p class="mu">${esc(cur)}의 오늘 누적 집중 시간</p><div class="record-time">${fmt(dayS()+elapsed())}</div>`;};
-const oldTimer=V.timer;
-V.timer=function(){return sectionTitle('FOCUS','집중 타이머')+oldTimer().replace('오늘의 랭킹','오늘의 집중').replace('<span class="mu">실시간</span>','<span class="mu">내 기록</span>');};
 const oldAn=V.an;
 V.an=function(){return sectionTitle('MY PLAN','내 속도에 맞는 계획')+oldAn();};
 

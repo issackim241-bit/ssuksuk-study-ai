@@ -1,7 +1,7 @@
 /* ===== JavaScript 기능 시작 ===== */
 /* ===== 쑥쑥 스터디 코드 지도 (자세한 설명은 인수인계.md) =====
  저장: localStorage(sg_u 전체 유저, sg_c 로그인 중인 이름), 현재 유저 데이터는 D
- 화면: V.home / V.timer / V.an / V.game 이 각 탭을 그림, render()가 전체를 다시 그림
+ 화면: V.home / V.an / V.game 이 각 탭을 그림, render()가 전체를 다시 그림
  수정 지점: PETS(성장 단계) · LK(외부 링크) · HQ(역사 퀴즈) · DECKS(암기 카드) · SN(알람음)
  AI 도우미 탭: aiPage / aiSend / histHTML (대화 기록은 D.chats), 로비의 AI 브리핑: brief / follow
  AI 채팅은 서버의 OpenAI API를 사용해요. HTML 파일을 직접 열면 API 연결은 작동하지 않아요 */
@@ -15,7 +15,6 @@ let U = {},
   cur = null,
   D = null,
   tab = "home",
-  ti = null,
   G = { m: "" };
 const tabSessionKey = 'ssuksuk.tab-session';
 let csrf = '', revision = 0, saveTimer, savePending = false, saving = false, conflict = false;
@@ -29,14 +28,9 @@ const save = () => {
   updateSync();
 };
 const today = () => new Date().toLocaleDateString("sv");
-const fmt = (s) =>
-  [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60]
-    .map((v) => String(v).padStart(2, "0"))
-    .join(":");
 const ST = [0, 30, 100, 250, 500];
 const IC = {
   home: "M3 11l9-8 9 8v10h-6v-6H9v6H3z",
-  timer: "M12 7v5l3 2M12 21a8 8 0 100-16 8 8 0 000 16zM9 2h6",
   an: "M5 20V10M12 20V4M19 20v-7",
   game: "M6 8h12a3 3 0 013 3v4a3 3 0 01-5 2l-1-2H9l-1 2a3 3 0 01-5-2v-4a3 3 0 013-3zM8 11v3M6.5 12.5h3M16 12h.01M18 14h.01",
   card: "M4 6h16v12H4zM8 10h8M8 14h5",
@@ -233,7 +227,6 @@ async function flushSave(){
 }
 async function logout(){
  if(saving){toast('저장 중입니다. 잠시 후 다시 눌러 주세요.');return;}
- if(D?.run)stopT();
  if(!await flushSave()){toast('저장되지 않은 기록이 있습니다. 내 기록을 내려받은 뒤 다시 시도해 주세요.');return;}
  try{await api('/auth/logout',{method:'POST'});try { sessionStorage.removeItem(tabSessionKey); } catch {} AI.ctl?.abort();AI={v:'chat',cur:null,busy:0,ctl:null};U={};D=null;cur=null;csrf='';selectedLogin='';authMode='login';tab='home';clearTimeout(saveTimer);render();}
  catch(e){toast(e.message);}
@@ -278,7 +271,6 @@ const V = {
     const todo = D.plan.filter((p) => !p.d).slice(0, 3);
     return `<section class="hero"><p class="hs">${esc(cur)}님, 반가워요</p><h1>오늘도 한 걸음<br>자라볼까요?</h1><div class="pw"><div class="pe">${P.e[s]}</div><div style="flex:1"><b>${P.t[s]}</b><div class="bar"><i style="width:${pr}%"></i></div><span class="hs">${nx ? `다음 단계까지 ${nx - D.pts}P` : "최고 단계예요"}</span></div></div></section>
  <div class="grid">${[
-   ["timer", "timer", "공부 타이머"],
    ["an", "an", "스케줄"],
    ["game", "game", "미니게임"],
    ["gc", "card", "암기 카드"],
@@ -293,44 +285,11 @@ const V = {
  <div class="card memo-card"><div class="ct"><div><p class="eyebrow">QUICK NOTE</p><h3>공부 메모</h3></div><span class="mu">계정에 저장</span></div><p class="mu memo-help">갑자기 떠오른 질문이나 다음에 복습할 내용을 적어 두세요.</p><div class="memo-entry"><input id="memoText" maxlength="160" placeholder="예: 수학 3단원 오답 다시 풀기" onkeydown="if(event.key==='Enter')addNote()"><button onclick="addNote()">추가</button></div><div class="memo-list">${(D.notes || []).length ? D.notes.slice().reverse().map((n, i) => `<div class="memo-item"><span>${esc(n.text)}</span><button class="icon-btn" aria-label="메모 삭제" onclick="delNote(${D.notes.length - 1 - i})">×</button></div>`).join("") : '<p class="empty-note">아직 메모가 없어요. 작은 할 일부터 적어 보세요.</p>'}</div></div>
  <div class="row account-actions"><button class="s" onclick="setPet(D.pet=='tree'?'animal':'tree')">키울 친구 바꾸기 (${P.n})</button><button class="s" onclick="logout()">로그아웃</button></div>`;
   },
-  timer() {
-    const rows = Object.entries(D.logs).sort((a, b) => b[1] - a[1]),
-      mx = rows.length ? rows[0][1] : 1,
-      run = D.run,
-      cs = SUB || D.subs[0];
-    return `<div class="card tcard"><p class="mu" id="td2" style="margin:0">오늘 ${fmt(dayS() + elapsed())}</p><div class="big" id="tm">${fmt(elapsed())}</div>
- ${
-   run
-     ? `<p class="mu" style="margin:0 0 14px">${esc(run.s)}${run.g ? ` · 목표 ${run.g}분` : ""}</p><button class="w stop" onclick="stopT();render()">공부 끝내기</button>`
-     : `<div class="chips">${D.subs.map((s) => `<button class="chip2 ${cs == s ? "on" : ""}" data-s="${esc(s)}" onclick="SUB=this.dataset.s;render()">${esc(s)}</button>`).join("")}</div><div class="opt2"><label>목표 시간<select onchange="GOAL=+this.value">${[
-         [0, "없음"],
-         [25, "25분"],
-         [50, "50분"],
-         [90, "90분"],
-       ]
-         .map(
-           (g) =>
-             `<option value="${g[0]}" ${GOAL == g[0] ? "selected" : ""}>${g[1]}</option>`,
-         )
-         .join(
-           "",
-         )}</select></label><label>알람음<select onchange="D.snd=this.value;save();unlock();ringOnce()">${Object.keys(
-         SN,
-       )
-         .map((k) => `<option ${sn() == k ? "selected" : ""}>${k}</option>`)
-         .join(
-           "",
-         )}</select></label></div><button class="w" onclick="startT()">공부 시작</button>`
- }</div>
- <div class="card"><div class="ct"><h3>오늘의 랭킹</h3><span class="mu">실시간</span></div><div id="rk">${rkHTML()}</div></div>
- <div class="card"><div class="row"><input id="ns" placeholder="과목 추가 (예: 한국사)" style="margin:0"><button style="flex:0 0 auto" onclick="addSub()">추가</button></div></div>
- <div class="card"><h3>과목별 누적</h3>${rows.length ? rows.map((r) => `<p style="margin:8px 0 0">${esc(r[0])} <span class="mu">${Math.floor(r[1] / 60)}분</span></p><div class="bar"><i style="width:${(r[1] / mx) * 100}%"></i></div>`).join("") : '<p class="mu">아직 기록이 없어요. 타이머를 켜고 공부를 시작해 보세요.</p>'}</div>`;
-  },
   an() {
     const t = D.traits,
       x = D.tests,
       e = D.exam;
-    return `${coachHTML()}${linksHTML()}<div class="card"><h3>2. 내 학습 정보</h3><label>공부 습관<input id="th" value="${esc(t.habit)}" placeholder="예: 밤에 집중이 잘 돼요"></label><label>잘하는 과목<input id="tg" value="${esc(t.good)}"></label><label>부족한 과목<input id="tw" value="${esc(t.weak)}"></label></div>
+    return `${coachHTML()}${linksHTML()}<div class="card"><div class="row"><input id="ns" placeholder="과목 추가 (예: 한국사)" style="margin:0"><button style="flex:0 0 auto" onclick="addSub()">추가</button></div></div><div class="card"><h3>2. 내 학습 정보</h3><label>공부 습관<input id="th" value="${esc(t.habit)}" placeholder="예: 밤에 집중이 잘 돼요"></label><label>잘하는 과목<input id="tg" value="${esc(t.good)}"></label><label>부족한 과목<input id="tw" value="${esc(t.weak)}"></label></div>
  <div class="card"><h3>3. 테스트 결과 입력</h3><p class="mu" style="margin:0 0 8px">위 사이트에서 해 본 결과를 100점 기준으로 적어 주세요.</p><div class="row"><label>암기력<input id="t1" type="number" min="0" max="100" value="${x.mem}"></label><label>문제풀이<input id="t2" type="number" min="0" max="100" value="${x.sol}"></label><label>사고력<input id="t3" type="number" min="0" max="100" value="${x.thk}"></label></div><p class="lt">사이트 결과가 점수가 아니면 아래에 적어도 돼요 (선택)</p><div class="row"><label>숫자 기억 (자리수)<input id="s1" type="number" min="1" max="30" value="${x.hn || ""}"></label><label>시각 기억 (레벨)<input id="s2" type="number" min="1" max="40" value="${x.hv || ""}"></label></div><div class="row"><label>칸 아카데미 단계<select id="s3"><option value="">선택 안 함</option>${["시도함", "익숙함", "능숙함", "마스터"].map((o, i) => `<option value="${i}" ${x.kh === String(i) ? "selected" : ""}>${o}</option>`).join("")}</select></label><label>커리어넷 수리·논리 (백분위)<input id="s4" type="number" min="1" max="100" value="${x.cn || ""}"></label></div></div>
  <div class="card"><h3>4. 시험 일정</h3><div class="row"><label>시험 날짜<input id="ed" type="date" value="${e.date}"></label><label>하루 공부 시간(시간)<input id="eh" type="number" min="1" max="12" value="${e.hrs}"></label></div><button class="w" onclick="analyze()">분석하고 계획 만들기</button></div>
  ${D.report || ""}${D.plan.length ? `<div class="card"><h3>기본 공부 계획</h3><p class="mu">입력한 시험 일정과 공부 시간에 맞춘 기본 계획이에요. 완료하면 5P를 받아요.</p>${D.plan.map((p, i) => `<label class="chk"><input type="checkbox" ${p.d ? "checked disabled" : ""} onchange="donePlan(${i})"><span>${esc(p.t)}${p.w ? `<small class="mu" style="display:block">${esc(p.w)}</small>` : ""}</span></label>`).join("")}</div>` : ""}<div class="card"><div class="ct"><h3>AI 맞춤 공부 계획</h3><span class="mu">내 정보 기반</span></div><p class="mu">자기평가, 외부 테스트 결과, 공부 기록, 시험 날짜를 함께 참고해 계획을 구체화해요.</p><button class="w" id="aiPlanBtn" onclick="generateAIPlan()">${D.aiPlanText ? "AI 계획 다시 만들기" : "AI로 맞춤 계획 생성"}</button><p id="aiPlanStatus" class="mu" style="margin-top:10px"></p>${D.aiPlanText ? `<div class="ai-plan-text">${esc(D.aiPlanText).replace(/\n/g, "<br>")}</div>` : ""}</div><div class="card" style="padding:4px 18px"><button class="lk" style="width:100%;background:none;border-radius:0;padding:14px 0;text-align:left;color:var(--tx);font-weight:400;border-top:0" onclick="go('ai')"><span><b>AI 학습 도우미와 대화하기</b><small>계획을 바꾸거나 공부법을 더 물어볼 수 있어요</small></span>${svg("chev", 18)}</button></div>`;
@@ -348,15 +307,13 @@ const V = {
 };
 
 function render() {
-  clearInterval(ti);
   const a = $("#app");
   if (!D) {
     a.innerHTML = loginHTML();
     return;
   }
-  a.innerHTML = `<header><b>쑥쑥 스터디</b><span class="chip">${D.pts}P</span></header>${al ? `<div class="alb"><span>알람이 울리고 있어요</span><button onclick="stopRing();render()">끄기</button></div>` : ""}<main>${V[tab]()}</main><nav>${[
+  a.innerHTML = `<header><b>쑥쑥 스터디</b><span class="chip">${D.pts}P</span></header><main>${V[tab]()}</main><nav>${[
     ["home", "홈"],
-    ["timer", "타이머"],
     ["an", "스케줄"],
     ["game", "게임"],
   ]
@@ -365,10 +322,7 @@ function render() {
         `<button class="${tab == x[0] ? "on" : ""}" onclick="go('${x[0]}')">${svg(x[0])}${x[1]}</button>`,
     )
     .join("")}</nav>`;
-  if (tab == "timer" && D.run) {
-    tick();
-    ti = setInterval(tick, 1000);
-  }
+
 }
 function addNote() {
   const input = $("#memoText");
@@ -394,143 +348,6 @@ const setPet = (k) => {
   render();
 };
 
-/* 타이머 */
-let SUB = null,
-  GOAL = 0,
-  AC = null,
-  al = null,
-  RK = [],
-  dbR = null,
-  myId = null,
-  hb = 0;
-const SN = {
-  알람: { w: "square", f: [1000, 1000, 1000, 1000], d: 0.1, g: 0.15 },
-  벨: { w: "sine", f: [880, 660, 880, 660], d: 0.35, g: 0.35 },
-  차임: { w: "triangle", f: [523, 659, 784, 1047], d: 0.45, g: 0.3 },
-};
-const sn = () => (SN[D.snd] ? D.snd : "알람");
-const dayS = () => {
-  if (!D.day || D.day.d !== today()) D.day = { d: today(), s: 0 };
-  return D.day.s;
-};
-const elapsed = () =>
-  D && D.run ? Math.floor((Date.now() - D.run.t) / 1000) : 0;
-function unlock() {
-  try {
-    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
-    AC.resume();
-  } catch (e) {}
-}
-function ringOnce() {
-  if (!AC) return;
-  const k = SN[sn()],
-    t0 = AC.currentTime;
-  k.f.forEach((f, i) => {
-    const o = AC.createOscillator(),
-      g = AC.createGain(),
-      t = t0 + i * (k.d + 0.08);
-    o.type = k.w;
-    o.frequency.value = f;
-    g.gain.setValueAtTime(k.g, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + k.d);
-    o.connect(g);
-    g.connect(AC.destination);
-    o.start(t);
-    o.stop(t + k.d + 0.02);
-  });
-}
-function ring() {
-  D.run.al = 1;
-  save();
-  unlock();
-  ringOnce();
-  clearInterval(al);
-  al = setInterval(ringOnce, 2000);
-  try {
-    navigator.vibrate && navigator.vibrate([300, 150, 300]);
-  } catch (e) {}
-  render();
-}
-function stopRing() {
-  clearInterval(al);
-  al = null;
-}
-function tick() {
-  const el = $("#tm");
-  if (!D || !D.run) return;
-  const e = elapsed();
-  if (el) el.textContent = fmt(e);
-  const t = $("#td2");
-  if (t) t.textContent = "오늘 " + fmt(dayS() + e);
-  if (D.run.g && e >= D.run.g * 60 && !D.run.al) ring();
-}
-function startT() {
-  unlock();
-  D.run = { s: SUB || D.subs[0], t: Date.now(), g: GOAL };
-  dayS();
-  save();
-  sync(1);
-  render();
-}
-function stopT() {
-  if (!D.run) return;
-  const sec = elapsed();
-  D.logs[D.run.s] = (D.logs[D.run.s] || 0) + sec;
-  dayS();
-  D.day.s += sec;
-  D.pts += Math.floor(sec / 60);
-  D.run = null;
-  stopRing();
-  save();
-  sync(0);
-}
-function sync(run) {
-  if (!dbR || !myId || !D) return;
-  dbR
-    .doc("rank/" + myId)
-    .set({
-        d: today(),
-      s: dayS() + (run ? elapsed() : 0),
-      run: run ? 1 : 0,
-      sub: D.run ? D.run.s : "",
-      at: Date.now(),
-    })
-    .catch(() => {});
-}
-function rkHTML() {
-  if (!dbR)
-    return '<p class="mu" style="margin:0">랭킹은 로그인한 상태로 공유 링크에서 열면 켜져요.</p>';
-  const n = Date.now(),
-    L = RK.filter((r) => r.d === today())
-      .map((r) => {
-        const lv = r.run && n - r.at < 150000;
-        return { ...r, lv, t: Math.floor(r.s + (lv ? (n - r.at) / 1000 : 0)) };
-      })
-      .sort((a, b) => b.t - a.t)
-      .slice(0, 20);
-  if (!L.length)
-    return '<p class="mu" style="margin:0">오늘 공부한 사람이 아직 없어요. 첫 번째가 되어 보세요.</p>';
-  return L.map(
-    (r, i) =>
-      `<div class="rk ${r.id == myId ? "me" : ""}"><b>${i + 1}</b><span class="nm">${esc(r.name)}${r.lv ? `<em>${esc(r.sub)} 공부 중</em>` : ""}</span><span class="tt">${fmt(r.t)}</span></div>`,
-  ).join("");
-}
-async function initDb() {
-  // 순위 공유 기능은 별도 데이터베이스가 연결되어 있지 않으면 비활성화해요.
-  dbR = null;
-  const r = $("#rk");
-  if (r) r.innerHTML = rkHTML();
-}
-
-setInterval(() => {
-  if (!D) return;
-  if (D.run) {
-    tick();
-    if (++hb % 30 == 0) sync(1);
-  }
-  const r = $("#rk");
-  if (r) r.innerHTML = rkHTML();
-}, 1000);
 function addSub() {
   const v = $("#ns").value.trim();
   if (v && !D.subs.includes(v)) {
@@ -1692,7 +1509,6 @@ function delCard(k) {
   render();
 }
 boot();
-initDb();
 
 /* ===== JavaScript 기능 끝 ===== */
 
