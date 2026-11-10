@@ -1,7 +1,7 @@
 /* ===== JavaScript 기능 시작 ===== */
 /* ===== 쑥쑥 스터디 코드 지도 (자세한 설명은 인수인계.md) =====
  저장: localStorage(sg_u 전체 유저, sg_c 로그인 중인 이름), 현재 유저 데이터는 D
- 화면: V.home / V.timer / V.an / V.game 이 각 탭을 그림, render()가 전체를 다시 그림
+ 화면: V.home / V.an / V.game 이 각 탭을 그림, render()가 전체를 다시 그림
  수정 지점: PETS(성장 단계) · LK(외부 링크) · HQ(역사 퀴즈) · DECKS(암기 카드) · SN(알람음)
  AI 도우미 탭: aiPage / aiSend / histHTML (대화 기록은 D.chats), 로비의 AI 브리핑: brief / follow
  AI 채팅은 서버의 OpenAI API를 사용해요. HTML 파일을 직접 열면 API 연결은 작동하지 않아요 */
@@ -15,7 +15,6 @@ let U = {},
   cur = null,
   D = null,
   tab = "home",
-  ti = null,
   G = { m: "" };
 const tabSessionKey = 'ssuksuk.tab-session';
 let csrf = '', revision = 0, saveTimer, savePending = false, saving = false, conflict = false;
@@ -29,14 +28,9 @@ const save = () => {
   updateSync();
 };
 const today = () => new Date().toLocaleDateString("sv");
-const fmt = (s) =>
-  [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60]
-    .map((v) => String(v).padStart(2, "0"))
-    .join(":");
 const ST = [0, 30, 100, 250, 500];
 const IC = {
   home: "M3 11l9-8 9 8v10h-6v-6H9v6H3z",
-  timer: "M12 7v5l3 2M12 21a8 8 0 100-16 8 8 0 000 16zM9 2h6",
   an: "M5 20V10M12 20V4M19 20v-7",
   game: "M6 8h12a3 3 0 013 3v4a3 3 0 01-5 2l-1-2H9l-1 2a3 3 0 01-5-2v-4a3 3 0 013-3zM8 11v3M6.5 12.5h3M16 12h.01M18 14h.01",
   card: "M4 6h16v12H4zM8 10h8M8 14h5",
@@ -74,8 +68,124 @@ const add = (n) => {
 const stage = () => ST.filter((v) => D.pts >= v).length - 1;
 
 /* 로그인 */
+const rememberedAccountsKey = 'ssuksuk.remembered-accounts';
+let selectedLogin = '';
+
+function rememberedAccounts() {
+  try {
+    const accounts = JSON.parse(localStorage.getItem(rememberedAccountsKey) || '[]');
+    if (!Array.isArray(accounts)) return [];
+    return accounts.filter(a => typeof a?.name === 'string' && typeof a.username === 'string' && /^[a-z0-9_-]{3,24}$/.test(a.username)).slice(0, 8);
+  } catch { return []; }
+}
+
+function saveRememberedAccounts(accounts) {
+  try { localStorage.setItem(rememberedAccountsKey, JSON.stringify(accounts.slice(0, 8))); } catch {}
+}
+
+function chooseRememberedAccount(username) {
+  selectedLogin = username;
+  authMode = 'login';
+  render();
+  $('#pw')?.focus();
+}
+
+function forgetRememberedAccount(username) {
+  saveRememberedAccounts(rememberedAccounts().filter(a => a.username !== username));
+  if (selectedLogin === username) selectedLogin = '';
+  render();
+}
+
+function accountChoicesHTML() {
+  const accounts = rememberedAccounts();
+  if (!accounts.length) return '';
+  return `<section class="remembered-accounts"><h3>계정 선택</h3>
+    ${accounts.map(a => `<div class="remembered-account">
+      <button type="button" class="s" data-username="${esc(a.username)}" onclick="chooseRememberedAccount(this.dataset.username)">
+        <strong>${esc(a.name)}</strong><small>@${esc(a.username)}</small>
+      </button>
+      <button type="button" class="text-btn" data-username="${esc(a.username)}" aria-label="${esc(a.username)} 목록에서 삭제" onclick="forgetRememberedAccount(this.dataset.username)">삭제</button>
+    </div>`).join('')}
+    <button type="button" class="text-btn" onclick="chooseRememberedAccount('');$('#nm').focus()">다른 계정 사용</button>
+    <p class="lt">이 브라우저에 닉네임과 아이디를 기억합니다.</p>
+  </section>`;
+}
+
+function recoveryHTML() {
+  return `<main class="auth-page"><a class="wordmark" href="/">쑥쑥<span>스터디</span></a>
+    <form class="card auth-form" onsubmit="event.preventDefault();recoverAccount(event.submitter?.value==='reset')">
+      <h2>아이디 · 비밀번호 찾기</h2>
+      <p class="lt">로그인한 상태에서 발급해 둔 복구 코드를 입력하세요. 비밀번호를 바꾸면 사용한 코드는 만료됩니다.</p>
+      <label>복구 코드<input id="recoveryInput" required maxlength="48" autocomplete="off" spellcheck="false"></label>
+      <button type="submit" value="lookup" class="s">아이디 확인</button>
+      <label>새 비밀번호<input id="recoveryPassword" type="password" maxlength="128" autocomplete="new-password" placeholder="재설정할 때만 입력 · 8자 이상"></label>
+      <button type="submit" value="reset" class="w">비밀번호 재설정</button>
+      <p id="recoveryResult" role="status"></p>
+      <button type="button" class="text-btn" onclick="authMode='login';render()">로그인으로 돌아가기</button>
+    </form></main>`;
+}
+
+async function recoverAccount(reset) {
+  const result = $('#recoveryResult');
+  const buttons = result.closest('form').querySelectorAll('button[type="submit"]');
+  const body = {code:$('#recoveryInput').value};
+  if (reset) {
+    body.password = $('#recoveryPassword').value;
+    if (body.password.length < 8) { result.textContent = '새 비밀번호를 8자 이상 입력해 주세요.'; return; }
+  }
+  buttons.forEach(button => button.disabled = true);
+  try {
+    const {username} = await api('/auth/recover',{method:'POST',body:JSON.stringify(body)});
+    selectedLogin = username;
+    result.textContent = reset ? `아이디는 ${username}입니다. 새 비밀번호로 로그인하세요.` : `아이디는 ${username}입니다.`;
+    if (reset) {
+      $('#recoveryInput').value = '';
+      $('#recoveryPassword').value = '';
+    }
+  } catch (error) {
+    result.textContent = error.message;
+  } finally {
+    buttons.forEach(button => button.disabled = false);
+  }
+}
+
+function openRecoverySettings() {
+  if ($('#recoveryDialog')) return;
+  const dialog = document.createElement('dialog');
+  dialog.id = 'recoveryDialog';
+  dialog.className = 'card recovery-dialog';
+  dialog.innerHTML = `<form><h2>복구 코드 발급</h2>
+    <p class="lt">코드는 아이디 찾기와 비밀번호 재설정에 사용합니다. 새 코드를 발급하면 이전 코드는 만료됩니다.</p>
+    <label>현재 비밀번호<input type="password" autocomplete="current-password" minlength="8" maxlength="128" required></label>
+    <button type="submit">코드 발급</button><p role="status"></p>
+    <button type="button" class="s">닫기</button></form>`;
+  const password = dialog.querySelector('input');
+  const message = dialog.querySelector('[role="status"]');
+  const submit = dialog.querySelector('[type="submit"]');
+  dialog.querySelector('[type="button"]').onclick = () => dialog.close();
+  dialog.addEventListener('close', () => dialog.remove(), {once:true});
+  dialog.querySelector('form').onsubmit = async event => {
+    event.preventDefault();
+    submit.disabled = true;
+    try {
+      const {code} = await api('/auth/recovery-code',{method:'POST',body:JSON.stringify({password:password.value})});
+      password.value = '';
+      const output = document.createElement('code');
+      output.textContent = code;
+      message.replaceChildren('이 코드를 안전한 곳에 따로 저장하세요.', document.createElement('br'), output);
+      submit.hidden = true;
+    } catch (error) {
+      message.textContent = error.message;
+      submit.disabled = false;
+    }
+  };
+  document.body.append(dialog);
+  dialog.showModal();
+}
+
 function loginHTML(m = '') {
-  return `<main class="auth-page"><a class="wordmark" href="/">쑥쑥<span>스터디</span></a><div class="auth-intro"><span class="eyebrow">나의 공부, 한곳에.</span><h1>공부의 흐름을<br>이어 가는 곳.</h1><p>계획하고, 집중하고, 짧게 복습하세요.<br>기록은 로그인한 계정에 남습니다.</p></div><form class="card auth-form" onsubmit="event.preventDefault();login()"><div class="auth-tabs"><button type="button" class="${authMode==='login'?'active':''}" onclick="authMode='login';render()">로그인</button><button type="button" class="${authMode==='register'?'active':''}" onclick="authMode='register';render()">회원가입</button></div>${authMode==='register'?'<label>닉네임<input id="dn" maxlength="24" autocomplete="nickname" placeholder="앱에서 부를 이름"></label>':''}<label>아이디<input id="nm" required minlength="3" maxlength="24" autocomplete="username" placeholder="영문·숫자 3~24자"></label><label>비밀번호<input id="pw" required type="password" minlength="8" maxlength="128" autocomplete="${authMode==='register'?'new-password':'current-password'}" placeholder="8자 이상"></label><button class="w" id="loginBtn" type="submit">${authMode==='register'?'계정 만들기':'로그인'}</button><p class="no" id="lm" role="alert">${esc(m)}</p><p class="lt">비밀번호는 암호화된 해시로 보관합니다. 질문과 일부 학습 정보는 AI 답변을 위해 OpenAI로 전송됩니다.</p></form></main>`;
+  if (authMode === 'recover') return recoveryHTML();
+  return `<main class="auth-page"><a class="wordmark" href="/">쑥쑥<span>스터디</span></a><div class="auth-intro"><span class="eyebrow">나의 공부, 한곳에.</span><h1>공부의 흐름을<br>이어 가는 곳.</h1><p>계획하고, 집중하고, 짧게 복습하세요.<br>기록은 로그인한 계정에 남습니다.</p></div><form class="card auth-form" onsubmit="event.preventDefault();login()"><div class="auth-tabs"><button type="button" class="${authMode==='login'?'active':''}" onclick="authMode='login';render()">로그인</button><button type="button" class="${authMode==='register'?'active':''}" onclick="authMode='register';render()">회원가입</button></div>${authMode==='login'?accountChoicesHTML():''}${authMode==='register'?'<label>닉네임<input id="dn" maxlength="24" autocomplete="nickname" placeholder="앱에서 부를 이름"></label>':''}<label>아이디<input id="nm" required minlength="3" maxlength="24" autocomplete="username" value="${authMode==='login'?esc(selectedLogin):''}" placeholder="영문·숫자 3~24자"></label><label>비밀번호<input id="pw" required type="password" minlength="8" maxlength="128" autocomplete="${authMode==='register'?'new-password':'current-password'}" placeholder="8자 이상"></label><button class="w" id="loginBtn" type="submit">${authMode==='register'?'계정 만들기':'로그인'}</button>${authMode==='login'?'<button type="button" class="text-btn" onclick="authMode=\'recover\';render()">아이디 · 비밀번호 찾기</button>':''}<p class="no" id="lm" role="alert">${esc(m)}</p><p class="lt">비밀번호는 암호화된 해시로 보관합니다. 질문과 일부 학습 정보는 AI 답변을 위해 OpenAI로 전송됩니다.</p></form></main>`;
 }
 async function api(path, options = {}) {
   const response = await fetch('/api'+path, {credentials:'same-origin',...options,headers:{'Content-Type':'application/json','X-CSRF-Token':csrf,...options.headers}});
@@ -86,6 +196,9 @@ async function api(path, options = {}) {
 function loadAccount(account) {
   cur=account.name; csrf=account.csrf;revision=account.revision;D=account.state;
   try { sessionStorage.setItem(tabSessionKey, csrf); } catch {}
+  if (typeof account.username === 'string') {
+    saveRememberedAccounts([{username:account.username,name:account.name}, ...rememberedAccounts().filter(a => a.username !== account.username)]);
+  }
   U={};U[cur]={d:D};D.notes ||= [];D.gameHistory ||= [];
   savePending=false;conflict=false;syncMessage='서버 저장됨';
   if(!D.att.includes(today())){D.att.push(today());D.pts+=10;save();}
@@ -93,7 +206,11 @@ function loadAccount(account) {
 }
 async function login() {
   const button=$('#loginBtn');button.disabled=true;
-  try {loadAccount(await api('/auth/'+authMode,{method:'POST',body:JSON.stringify({username:$('#nm').value.trim(),password:$('#pw').value,name:$('#dn')?.value.trim()})}));}
+  try {
+    const mode = authMode;
+    loadAccount(await api('/auth/'+mode,{method:'POST',body:JSON.stringify({username:$('#nm').value.trim(),password:$('#pw').value,name:$('#dn')?.value.trim()})}));
+    if (mode === 'register') openRecoverySettings();
+  }
   catch(e){$('#lm').textContent=e.message;button.disabled=false;}
 }
 function updateSync(){for(const selector of ['#syncStatus','#accountSync']){const el=$(selector);if(el){el.textContent=syncMessage;el.classList.toggle('sync-error',conflict||syncMessage.includes('실패'));}}}
@@ -110,9 +227,8 @@ async function flushSave(){
 }
 async function logout(){
  if(saving){toast('저장 중입니다. 잠시 후 다시 눌러 주세요.');return;}
- if(D?.run)stopT();
  if(!await flushSave()){toast('저장되지 않은 기록이 있습니다. 내 기록을 내려받은 뒤 다시 시도해 주세요.');return;}
- try{await api('/auth/logout',{method:'POST'});try { sessionStorage.removeItem(tabSessionKey); } catch {} D=null;cur=null;csrf='';tab='home';clearTimeout(saveTimer);render();}
+ try{await api('/auth/logout',{method:'POST'});try { sessionStorage.removeItem(tabSessionKey); } catch {} AI.ctl?.abort();AI={v:'chat',cur:null,busy:0,ctl:null};U={};D=null;cur=null;csrf='';selectedLogin='';authMode='login';tab='home';clearTimeout(saveTimer);render();}
  catch(e){toast(e.message);}
 }
 function downloadRecords(){
@@ -155,7 +271,6 @@ const V = {
     const todo = D.plan.filter((p) => !p.d).slice(0, 3);
     return `<section class="hero"><p class="hs">${esc(cur)}님, 반가워요</p><h1>오늘도 한 걸음<br>자라볼까요?</h1><div class="pw"><div class="pe">${P.e[s]}</div><div style="flex:1"><b>${P.t[s]}</b><div class="bar"><i style="width:${pr}%"></i></div><span class="hs">${nx ? `다음 단계까지 ${nx - D.pts}P` : "최고 단계예요"}</span></div></div></section>
  <div class="grid">${[
-   ["timer", "timer", "공부 타이머"],
    ["an", "an", "스케줄"],
    ["game", "game", "미니게임"],
    ["gc", "card", "암기 카드"],
@@ -170,44 +285,11 @@ const V = {
  <div class="card memo-card"><div class="ct"><div><p class="eyebrow">QUICK NOTE</p><h3>공부 메모</h3></div><span class="mu">계정에 저장</span></div><p class="mu memo-help">갑자기 떠오른 질문이나 다음에 복습할 내용을 적어 두세요.</p><div class="memo-entry"><input id="memoText" maxlength="160" placeholder="예: 수학 3단원 오답 다시 풀기" onkeydown="if(event.key==='Enter')addNote()"><button onclick="addNote()">추가</button></div><div class="memo-list">${(D.notes || []).length ? D.notes.slice().reverse().map((n, i) => `<div class="memo-item"><span>${esc(n.text)}</span><button class="icon-btn" aria-label="메모 삭제" onclick="delNote(${D.notes.length - 1 - i})">×</button></div>`).join("") : '<p class="empty-note">아직 메모가 없어요. 작은 할 일부터 적어 보세요.</p>'}</div></div>
  <div class="row account-actions"><button class="s" onclick="setPet(D.pet=='tree'?'animal':'tree')">키울 친구 바꾸기 (${P.n})</button><button class="s" onclick="logout()">로그아웃</button></div>`;
   },
-  timer() {
-    const rows = Object.entries(D.logs).sort((a, b) => b[1] - a[1]),
-      mx = rows.length ? rows[0][1] : 1,
-      run = D.run,
-      cs = SUB || D.subs[0];
-    return `<div class="card tcard"><p class="mu" id="td2" style="margin:0">오늘 ${fmt(dayS() + elapsed())}</p><div class="big" id="tm">${fmt(elapsed())}</div>
- ${
-   run
-     ? `<p class="mu" style="margin:0 0 14px">${esc(run.s)}${run.g ? ` · 목표 ${run.g}분` : ""}</p><button class="w stop" onclick="stopT();render()">공부 끝내기</button>`
-     : `<div class="chips">${D.subs.map((s) => `<button class="chip2 ${cs == s ? "on" : ""}" data-s="${esc(s)}" onclick="SUB=this.dataset.s;render()">${esc(s)}</button>`).join("")}</div><div class="opt2"><label>목표 시간<select onchange="GOAL=+this.value">${[
-         [0, "없음"],
-         [25, "25분"],
-         [50, "50분"],
-         [90, "90분"],
-       ]
-         .map(
-           (g) =>
-             `<option value="${g[0]}" ${GOAL == g[0] ? "selected" : ""}>${g[1]}</option>`,
-         )
-         .join(
-           "",
-         )}</select></label><label>알람음<select onchange="D.snd=this.value;save();unlock();ringOnce()">${Object.keys(
-         SN,
-       )
-         .map((k) => `<option ${sn() == k ? "selected" : ""}>${k}</option>`)
-         .join(
-           "",
-         )}</select></label></div><button class="w" onclick="startT()">공부 시작</button>`
- }</div>
- <div class="card"><div class="ct"><h3>오늘의 랭킹</h3><span class="mu">실시간</span></div><div id="rk">${rkHTML()}</div></div>
- <div class="card"><div class="row"><input id="ns" placeholder="과목 추가 (예: 한국사)" style="margin:0"><button style="flex:0 0 auto" onclick="addSub()">추가</button></div></div>
- <div class="card"><h3>과목별 누적</h3>${rows.length ? rows.map((r) => `<p style="margin:8px 0 0">${esc(r[0])} <span class="mu">${Math.floor(r[1] / 60)}분</span></p><div class="bar"><i style="width:${(r[1] / mx) * 100}%"></i></div>`).join("") : '<p class="mu">아직 기록이 없어요. 타이머를 켜고 공부를 시작해 보세요.</p>'}</div>`;
-  },
   an() {
     const t = D.traits,
       x = D.tests,
       e = D.exam;
-    return `${coachHTML()}${linksHTML()}<div class="card"><h3>2. 내 학습 정보</h3><label>공부 습관<input id="th" value="${esc(t.habit)}" placeholder="예: 밤에 집중이 잘 돼요"></label><label>잘하는 과목<input id="tg" value="${esc(t.good)}"></label><label>부족한 과목<input id="tw" value="${esc(t.weak)}"></label></div>
+    return `${coachHTML()}${linksHTML()}<div class="card"><div class="row"><input id="ns" placeholder="과목 추가 (예: 한국사)" style="margin:0"><button style="flex:0 0 auto" onclick="addSub()">추가</button></div></div><div class="card"><h3>2. 내 학습 정보</h3><label>공부 습관<input id="th" value="${esc(t.habit)}" placeholder="예: 밤에 집중이 잘 돼요"></label><label>잘하는 과목<input id="tg" value="${esc(t.good)}"></label><label>부족한 과목<input id="tw" value="${esc(t.weak)}"></label></div>
  <div class="card"><h3>3. 테스트 결과 입력</h3><p class="mu" style="margin:0 0 8px">위 사이트에서 해 본 결과를 100점 기준으로 적어 주세요.</p><div class="row"><label>암기력<input id="t1" type="number" min="0" max="100" value="${x.mem}"></label><label>문제풀이<input id="t2" type="number" min="0" max="100" value="${x.sol}"></label><label>사고력<input id="t3" type="number" min="0" max="100" value="${x.thk}"></label></div><p class="lt">사이트 결과가 점수가 아니면 아래에 적어도 돼요 (선택)</p><div class="row"><label>숫자 기억 (자리수)<input id="s1" type="number" min="1" max="30" value="${x.hn || ""}"></label><label>시각 기억 (레벨)<input id="s2" type="number" min="1" max="40" value="${x.hv || ""}"></label></div><div class="row"><label>칸 아카데미 단계<select id="s3"><option value="">선택 안 함</option>${["시도함", "익숙함", "능숙함", "마스터"].map((o, i) => `<option value="${i}" ${x.kh === String(i) ? "selected" : ""}>${o}</option>`).join("")}</select></label><label>커리어넷 수리·논리 (백분위)<input id="s4" type="number" min="1" max="100" value="${x.cn || ""}"></label></div></div>
  <div class="card"><h3>4. 시험 일정</h3><div class="row"><label>시험 날짜<input id="ed" type="date" value="${e.date}"></label><label>하루 공부 시간(시간)<input id="eh" type="number" min="1" max="12" value="${e.hrs}"></label></div><button class="w" onclick="analyze()">분석하고 계획 만들기</button></div>
  ${D.report || ""}${D.plan.length ? `<div class="card"><h3>기본 공부 계획</h3><p class="mu">입력한 시험 일정과 공부 시간에 맞춘 기본 계획이에요. 완료하면 5P를 받아요.</p>${D.plan.map((p, i) => `<label class="chk"><input type="checkbox" ${p.d ? "checked disabled" : ""} onchange="donePlan(${i})"><span>${esc(p.t)}${p.w ? `<small class="mu" style="display:block">${esc(p.w)}</small>` : ""}</span></label>`).join("")}</div>` : ""}<div class="card"><div class="ct"><h3>AI 맞춤 공부 계획</h3><span class="mu">내 정보 기반</span></div><p class="mu">자기평가, 외부 테스트 결과, 공부 기록, 시험 날짜를 함께 참고해 계획을 구체화해요.</p><button class="w" id="aiPlanBtn" onclick="generateAIPlan()">${D.aiPlanText ? "AI 계획 다시 만들기" : "AI로 맞춤 계획 생성"}</button><p id="aiPlanStatus" class="mu" style="margin-top:10px"></p>${D.aiPlanText ? `<div class="ai-plan-text">${esc(D.aiPlanText).replace(/\n/g, "<br>")}</div>` : ""}</div><div class="card" style="padding:4px 18px"><button class="lk" style="width:100%;background:none;border-radius:0;padding:14px 0;text-align:left;color:var(--tx);font-weight:400;border-top:0" onclick="go('ai')"><span><b>AI 학습 도우미와 대화하기</b><small>계획을 바꾸거나 공부법을 더 물어볼 수 있어요</small></span>${svg("chev", 18)}</button></div>`;
@@ -225,15 +307,13 @@ const V = {
 };
 
 function render() {
-  clearInterval(ti);
   const a = $("#app");
   if (!D) {
     a.innerHTML = loginHTML();
     return;
   }
-  a.innerHTML = `<header><b>쑥쑥 스터디</b><span class="chip">${D.pts}P</span></header>${al ? `<div class="alb"><span>알람이 울리고 있어요</span><button onclick="stopRing();render()">끄기</button></div>` : ""}<main>${V[tab]()}</main><nav>${[
+  a.innerHTML = `<header><b>쑥쑥 스터디</b><span class="chip">${D.pts}P</span></header><main>${V[tab]()}</main><nav>${[
     ["home", "홈"],
-    ["timer", "타이머"],
     ["an", "스케줄"],
     ["game", "게임"],
   ]
@@ -242,10 +322,7 @@ function render() {
         `<button class="${tab == x[0] ? "on" : ""}" onclick="go('${x[0]}')">${svg(x[0])}${x[1]}</button>`,
     )
     .join("")}</nav>`;
-  if (tab == "timer" && D.run) {
-    tick();
-    ti = setInterval(tick, 1000);
-  }
+
 }
 function addNote() {
   const input = $("#memoText");
@@ -271,143 +348,6 @@ const setPet = (k) => {
   render();
 };
 
-/* 타이머 */
-let SUB = null,
-  GOAL = 0,
-  AC = null,
-  al = null,
-  RK = [],
-  dbR = null,
-  myId = null,
-  hb = 0;
-const SN = {
-  알람: { w: "square", f: [1000, 1000, 1000, 1000], d: 0.1, g: 0.15 },
-  벨: { w: "sine", f: [880, 660, 880, 660], d: 0.35, g: 0.35 },
-  차임: { w: "triangle", f: [523, 659, 784, 1047], d: 0.45, g: 0.3 },
-};
-const sn = () => (SN[D.snd] ? D.snd : "알람");
-const dayS = () => {
-  if (!D.day || D.day.d !== today()) D.day = { d: today(), s: 0 };
-  return D.day.s;
-};
-const elapsed = () =>
-  D && D.run ? Math.floor((Date.now() - D.run.t) / 1000) : 0;
-function unlock() {
-  try {
-    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
-    AC.resume();
-  } catch (e) {}
-}
-function ringOnce() {
-  if (!AC) return;
-  const k = SN[sn()],
-    t0 = AC.currentTime;
-  k.f.forEach((f, i) => {
-    const o = AC.createOscillator(),
-      g = AC.createGain(),
-      t = t0 + i * (k.d + 0.08);
-    o.type = k.w;
-    o.frequency.value = f;
-    g.gain.setValueAtTime(k.g, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + k.d);
-    o.connect(g);
-    g.connect(AC.destination);
-    o.start(t);
-    o.stop(t + k.d + 0.02);
-  });
-}
-function ring() {
-  D.run.al = 1;
-  save();
-  unlock();
-  ringOnce();
-  clearInterval(al);
-  al = setInterval(ringOnce, 2000);
-  try {
-    navigator.vibrate && navigator.vibrate([300, 150, 300]);
-  } catch (e) {}
-  render();
-}
-function stopRing() {
-  clearInterval(al);
-  al = null;
-}
-function tick() {
-  const el = $("#tm");
-  if (!D || !D.run) return;
-  const e = elapsed();
-  if (el) el.textContent = fmt(e);
-  const t = $("#td2");
-  if (t) t.textContent = "오늘 " + fmt(dayS() + e);
-  if (D.run.g && e >= D.run.g * 60 && !D.run.al) ring();
-}
-function startT() {
-  unlock();
-  D.run = { s: SUB || D.subs[0], t: Date.now(), g: GOAL };
-  dayS();
-  save();
-  sync(1);
-  render();
-}
-function stopT() {
-  if (!D.run) return;
-  const sec = elapsed();
-  D.logs[D.run.s] = (D.logs[D.run.s] || 0) + sec;
-  dayS();
-  D.day.s += sec;
-  D.pts += Math.floor(sec / 60);
-  D.run = null;
-  stopRing();
-  save();
-  sync(0);
-}
-function sync(run) {
-  if (!dbR || !myId || !D) return;
-  dbR
-    .doc("rank/" + myId)
-    .set({
-        d: today(),
-      s: dayS() + (run ? elapsed() : 0),
-      run: run ? 1 : 0,
-      sub: D.run ? D.run.s : "",
-      at: Date.now(),
-    })
-    .catch(() => {});
-}
-function rkHTML() {
-  if (!dbR)
-    return '<p class="mu" style="margin:0">랭킹은 로그인한 상태로 공유 링크에서 열면 켜져요.</p>';
-  const n = Date.now(),
-    L = RK.filter((r) => r.d === today())
-      .map((r) => {
-        const lv = r.run && n - r.at < 150000;
-        return { ...r, lv, t: Math.floor(r.s + (lv ? (n - r.at) / 1000 : 0)) };
-      })
-      .sort((a, b) => b.t - a.t)
-      .slice(0, 20);
-  if (!L.length)
-    return '<p class="mu" style="margin:0">오늘 공부한 사람이 아직 없어요. 첫 번째가 되어 보세요.</p>';
-  return L.map(
-    (r, i) =>
-      `<div class="rk ${r.id == myId ? "me" : ""}"><b>${i + 1}</b><span class="nm">${esc(r.name)}${r.lv ? `<em>${esc(r.sub)} 공부 중</em>` : ""}</span><span class="tt">${fmt(r.t)}</span></div>`,
-  ).join("");
-}
-async function initDb() {
-  // 순위 공유 기능은 별도 데이터베이스가 연결되어 있지 않으면 비활성화해요.
-  dbR = null;
-  const r = $("#rk");
-  if (r) r.innerHTML = rkHTML();
-}
-
-setInterval(() => {
-  if (!D) return;
-  if (D.run) {
-    tick();
-    if (++hb % 30 == 0) sync(1);
-  }
-  const r = $("#rk");
-  if (r) r.innerHTML = rkHTML();
-}, 1000);
 function addSub() {
   const v = $("#ns").value.trim();
   if (v && !D.subs.includes(v)) {
@@ -1119,6 +1059,7 @@ async function aiSend(t) {
   const el = $("#cq");
   t = (t || (el ? el.value : "")).trim();
   if (!t || AI.busy) return;
+  const accountState = D;
   let c = curChat();
   if (!c) {
     c = { id: Date.now(), t: t.slice(0, 24), ts: Date.now(), m: [] };
@@ -1171,6 +1112,7 @@ async function aiSend(t) {
     if (e && e.name === "AbortError") a.c = "(응답을 중지했어요)";
     else a.c = "AI 연결에 실패했어요. " + (e && e.message ? e.message : "서버 실행 상태와 API 설정을 확인해 주세요.");
   }
+  if (D !== accountState) return;
   AI.busy = 0;
   AI.ctl = null;
   save();
@@ -1181,6 +1123,7 @@ async function generateAIPlan() {
   const status = $("#aiPlanStatus");
   const button = $("#aiPlanBtn");
   if (!D) return;
+  const accountState = D;
   if (!D.analysisDone) {
     if (status) status.textContent = "먼저 학습 정보를 입력하고 '분석하고 계획 만들기'를 눌러 주세요.";
     return;
@@ -1220,6 +1163,7 @@ async function generateAIPlan() {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "AI 요청에 실패했어요.");
+    if (D !== accountState) return;
     D.aiPlanText = String(data.reply || "계획을 만들지 못했어요.").slice(0, 9000);
     D.aiPlanDate = today();
     save();
@@ -1565,7 +1509,6 @@ function delCard(k) {
   render();
 }
 boot();
-initDb();
 
 /* ===== JavaScript 기능 끝 ===== */
 
