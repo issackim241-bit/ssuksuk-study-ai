@@ -73,6 +73,11 @@ body[data-page]:not(:has(.auth-page)) nav button.on { color: var(--ac); }
   .resource-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 }
 .game-category { color: var(--ac); font-size: 12px; }
+.school-level-buttons { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.school-level-buttons button { padding: 10px 5px; }
+.school-level-buttons small { display: block; font-weight: 400; font-size: 11px; margin-top: 4px; }
+.school-level-buttons [aria-pressed="true"] { background: #e4efe4; border-color: var(--ac); color: #254a36; }
+.plan-details .game-grid { margin-bottom: 0; }
 .game-tile { min-height: 135px; }
 .game-tile h2 { margin-top: 8px; }
 @media (max-width: 420px) {

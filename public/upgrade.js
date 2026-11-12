@@ -39,8 +39,486 @@ const games=[
  ['16','한 장씩 개념 읽기','news','복습','카드뉴스를 읽고 응용 문제 풀기','startNews(0)'],
  ['17','심화 응용 퀴즈','challenge','사고력','확률·농도·자료 해석을 여러 단계로 풀기',"startQuiz('challenge')"]
 ];
-let gameFilter='전체';
-gameMenu=function(){const list=games.filter(g=>gameFilter==='전체'||g[3]===gameFilter);return sectionTitle('','학습 놀이터')+`<div class="filter-row">${['전체','계산','사고력','과목','복습'].map(f=>`<button class="${gameFilter===f?'selected':''}" onclick="gameFilter='${f}';render()">${f}</button>`).join('')}</div><div class="game-grid">${list.map(g=>`<button class="game-tile" onclick="${g[5]}"><span class="game-category">${g[3]}</span><h2>${g[1]}</h2><p>${g[4]}</p><span class="game-arrow">↗</span></button>`).join('')}</div><section class="card"><div class="ct"><h2>최근 플레이</h2><small class="mu">최근 10회</small></div>${(D.gameHistory||[]).slice(0,10).map(h=>`<div class="history-line"><span>${esc(h.title)}</span><b>${h.score} / ${h.total}</b><small>${esc(h.date)}</small></div>`).join('')||'<p class="mu">한 판을 마치면 여기에 기록됩니다.</p>'}</section>`;};
+
+const schoolLevels = {
+ elementary: {name:'초등', description:'사칙연산·기초 개념'},
+ middle: {name:'중등', description:'교과 개념 적용'},
+ high: {name:'고등', description:'추론·자료 해석'},
+};
+const levelSubjects = {
+ math:['수학','계산'],
+ science:['과학','과목'],
+ history:['한국사','과목'],
+ english:['영어','과목'],
+};
+const levelBanks = {
+ "elementary": {
+  "math": [
+   [
+    "귤 36개를 친구 4명이 똑같이 나누면 한 명에 몇 개인가요?",
+    "9",
+    "8",
+    "10",
+    "12",
+    "36 ÷ 4 = 9예요."
+   ],
+   [
+    "케이크의 1/4을 먹고 2/4를 더 먹었어요. 남은 양은?",
+    "1/4",
+    "2/4",
+    "3/4",
+    "1/2",
+    "전체 4조각 중 3조각을 먹어 1조각이 남아요."
+   ],
+   [
+    "가로 8cm, 세로 5cm인 직사각형의 둘레는?",
+    "26cm",
+    "40cm",
+    "13cm",
+    "30cm",
+    "둘레는 (8 + 5) × 2 = 26cm예요."
+   ],
+   [
+    "버스가 오전 9시 45분에 출발해 35분 뒤 도착했어요. 도착 시각은?",
+    "오전 10시 20분",
+    "오전 10시 10분",
+    "오전 10시 30분",
+    "오전 9시 80분",
+    "15분 후 10시, 나머지 20분 후 10시 20분이에요."
+   ]
+  ],
+  "science": [
+   [
+    "얼음이 물로 변하는 현상은?",
+    "녹음",
+    "응결",
+    "기화",
+    "얼음이 되는 현상",
+    "고체인 얼음이 열을 받아 액체가 돼요."
+   ],
+   [
+    "흙 속에서 식물이 물을 주로 흡수하는 부분은?",
+    "뿌리",
+    "잎",
+    "꽃",
+    "열매",
+    "뿌리가 흙에서 물을 흡수해요."
+   ],
+   [
+    "자석에 가장 잘 붙는 것은?",
+    "철 클립",
+    "나무젓가락",
+    "종이",
+    "플라스틱 자",
+    "철은 자석에 잘 끌려요."
+   ],
+   [
+    "낮에 같은 장소의 그림자 길이가 바뀌는 까닭은?",
+    "태양이 보이는 높이가 달라져서",
+    "바람이 강해져서",
+    "물체 크기가 달라져서",
+    "땅이 움직여서",
+    "태양이 높이 보이면 같은 물체의 그림자가 짧아져요."
+   ]
+  ],
+  "history": [
+   [
+    "훈민정음 창제를 이끈 조선의 왕은?",
+    "세종",
+    "태조",
+    "정조",
+    "광해군",
+    "세종은 백성이 쉽게 배울 수 있도록 새 문자를 만들었어요."
+   ],
+   [
+    "삼국에 해당하는 나라끼리 묶인 것은?",
+    "고구려·백제·신라",
+    "고려·백제·조선",
+    "신라·고려·발해",
+    "고조선·조선·신라",
+    "삼국은 고구려, 백제, 신라예요."
+   ],
+   [
+    "임진왜란 때 바다에서 일본군과 싸운 장군은?",
+    "이순신",
+    "강감찬",
+    "을지문덕",
+    "김유신",
+    "이순신은 조선 수군을 이끌었어요."
+   ],
+   [
+    "3·1 운동에서 사람들이 외친 것은?",
+    "대한 독립 만세",
+    "새 수도를 정하자",
+    "삼국을 통일하자",
+    "훈민정음을 만들자",
+    "1919년 3·1 운동에서 독립 의지를 드러냈어요."
+   ]
+  ],
+  "english": [
+   [
+    "I ___ a book every day. 빈칸에 들어갈 말은?",
+    "read",
+    "reads",
+    "reading",
+    "am read",
+    "주어가 I인 현재형 문장은 read를 써요."
+   ],
+   [
+    "‘상자 아래에’에 해당하는 표현은?",
+    "under the box",
+    "on the box",
+    "in the box",
+    "next to the box",
+    "under는 아래에라는 뜻이에요."
+   ],
+   [
+    "‘나는 사과 두 개가 있어요.’를 바르게 옮기면?",
+    "I have two apples.",
+    "I has two apples.",
+    "I have two apple.",
+    "I am two apples.",
+    "two 뒤에는 복수형 apples를 써요."
+   ],
+   [
+    "‘What time is it?’에 어울리는 대답은?",
+    "It's three o'clock.",
+    "I'm ten years old.",
+    "It's blue.",
+    "I'm fine.",
+    "What time은 시각을 묻는 표현이에요."
+   ]
+  ]
+ },
+ "middle": {
+  "math": [
+   [
+    "연립방정식 2x + y = 11, x − y = 1에서 x + y는?",
+    "7",
+    "5",
+    "8",
+    "11",
+    "두 식을 더하면 3x = 12라서 x = 4, y = 3이에요."
+   ],
+   [
+    "직선 y = −2x + 6과 두 좌표축이 만드는 삼각형의 넓이는?",
+    "9",
+    "6",
+    "12",
+    "18",
+    "절편이 3과 6이므로 넓이는 3 × 6 ÷ 2예요."
+   ],
+   [
+    "직각삼각형의 두 직각변이 6cm, 8cm이다. 빗변에 내린 높이는?",
+    "4.8cm",
+    "4cm",
+    "5cm",
+    "6cm",
+    "빗변은 10cm, 넓이는 24cm²이므로 높이는 48 ÷ 10이에요."
+   ],
+   [
+    "주사위를 두 번 던질 때 두 눈의 합이 9일 확률은?",
+    "1/9",
+    "1/6",
+    "1/12",
+    "2/9",
+    "(3,6), (4,5), (5,4), (6,3)의 4가지가 36가지 중에 있어요."
+   ]
+  ],
+  "science": [
+   [
+    "6Ω과 3Ω 저항을 9V 전원에 직렬 연결했다. 3Ω 저항 양끝의 전압은?",
+    "3V",
+    "1V",
+    "6V",
+    "9V",
+    "전류는 9V ÷ 9Ω = 1A이고 3Ω에서 전압은 3V예요."
+   ],
+   [
+    "질량 120g, 부피 150cm³인 물체를 물에 넣으면?",
+    "뜬다",
+    "가라앉는다",
+    "밀도가 물과 같다",
+    "부피만으로 떠오른다",
+    "밀도는 0.8g/cm³으로 물보다 작아요."
+   ],
+   [
+    "식물의 잎 일부를 불투명 종이로 가리고 햇빛에 뒀다. 아이오딘 용액으로 녹말을 검출하면?",
+    "가리지 않은 부분이 더 진하게 변한다",
+    "가린 부분만 진해진다",
+    "두 부분이 늘 같아진다",
+    "빛에 관계없이 녹말이 생기지 않는다",
+    "빛이 닿은 부분에서 광합성으로 녹말이 만들어져요. 잎의 기존 녹말을 제거한 뒤 비교해요."
+   ],
+   [
+    "닫힌 병에서 식초와 탄산수소 나트륨이 반응해 기체가 생겼다. 병 전체 질량은?",
+    "같다",
+    "줄어든다",
+    "늘어난다",
+    "기체 질량만큼 줄어든다",
+    "기체가 밖으로 빠져나가지 않아 전체 질량이 보존돼요."
+   ]
+  ],
+  "history": [
+   [
+    "고려 광종의 과거제 시행과 가장 관련 깊은 목적은?",
+    "관리를 선발하는 기준을 마련해 왕권을 강화한다",
+    "왜구의 침입을 물리친다",
+    "농민의 조세 부담을 없앤다",
+    "신라를 통일한다",
+    "시험으로 관리를 뽑아 호족의 영향력을 줄이고 왕권을 강화하려 했어요."
+   ],
+   [
+    "대동법을 시행한 뒤 공납을 내는 방식의 변화는?",
+    "토지 면적을 기준으로 쌀 등을 낸다",
+    "군역 대신 포 한 필만 낸다",
+    "모든 세금을 특산물로 낸다",
+    "호적에 올라 있는 사람 수로 공납을 정한다",
+    "지역 특산물을 바치던 공납을 토지 결수에 따른 쌀 등으로 바꿨어요."
+   ],
+   [
+    "강화도 조약이 불평등 조약으로 평가되는 근거는?",
+    "일본인 범죄를 일본 측이 재판할 수 있었다",
+    "조선이 일본 항구의 세관을 관리했다",
+    "양국이 모두 같은 치외법권을 가졌다",
+    "일본이 조선에 외교권을 넘겼다",
+    "일본에 일방적으로 인정한 영사 재판권이 불평등한 조항이었어요."
+   ],
+   [
+    "신분제 폐지를 개혁 내용으로 포함한 사건은?",
+    "갑오개혁",
+    "위화도 회군",
+    "훈민정음 반포",
+    "대동법 실시",
+    "갑오개혁에서 법적 신분 차별을 없애는 조치를 내렸어요."
+   ]
+  ],
+  "english": [
+   [
+    "I have lived here ___ 2021. 빈칸에 들어갈 말은?",
+    "since",
+    "for",
+    "during",
+    "by",
+    "since는 시작 시점을, for는 기간을 나타내요."
+   ],
+   [
+    "The book ___ by millions of readers. ‘수백만 명에게 읽혔다’의 뜻이 되는 표현은?",
+    "was read",
+    "read",
+    "was reading",
+    "has reading",
+    "주어가 읽히는 대상이므로 수동태 was read가 맞아요."
+   ],
+   [
+    "I know a girl ___ brother is a pilot. 빈칸에 들어갈 말은?",
+    "whose",
+    "who",
+    "whom",
+    "which",
+    "brother의 소유 관계를 나타내므로 whose를 써요."
+   ],
+   [
+    "‘Unless it rains, we will play outside.’의 뜻은?",
+    "비가 오지 않으면 밖에서 놀 거야.",
+    "비가 와야 밖에서 놀 거야.",
+    "비가 와도 밖에서 놀 거야.",
+    "밖에서 놀면 비가 올 거야.",
+    "unless는 if ... not과 같은 조건을 나타내요."
+   ]
+  ]
+ },
+ "high": {
+  "math": [
+   [
+    "x > 0에서 f(x) = x + 9/x의 최솟값은?",
+    "6",
+    "3",
+    "9",
+    "18",
+    "산술·기하평균 부등식으로 x + 9/x ≥ 2√9 = 6이고 x = 3에서 같아요."
+   ],
+   [
+    "실수 전체에서 f(x) = x³ − 3x² + 2의 극댓값과 극솟값의 차는?",
+    "4",
+    "2",
+    "6",
+    "8",
+    "f′(x) = 3x(x − 2). 극댓값 f(0) = 2, 극솟값 f(2) = −2예요."
+   ],
+   [
+    "수열 a₁ = 1, aₙ₊₁ = 2aₙ + 3에서 a₅는?",
+    "61",
+    "45",
+    "48",
+    "64",
+    "aₙ에 3을 더하면 첫항 4, 공비 2인 등비수열이 돼요. a₅ = 4 × 2⁴ − 3 = 61."
+   ],
+   [
+    "불량품 비율이 2%다. 불량품은 90%, 정상품은 5%가 검사에서 양성으로 나온다. 양성인 제품이 불량일 확률은 약 얼마인가?",
+    "27%",
+    "18%",
+    "45%",
+    "90%",
+    "양성 비율은 0.02 × 0.90 + 0.98 × 0.05 = 0.067. 이 중 불량 비율은 0.018 ÷ 0.067 ≈ 27%예요."
+   ]
+  ],
+  "science": [
+   [
+    "질량 m인 물체를 마찰 없는 경사면 위로 속력 v로 올려보낸다. 물체가 순간적으로 멈추는 지점의 출발점 대비 높이는?",
+    "v²/(2g)",
+    "v/g",
+    "v²/g",
+    "mgv²/2",
+    "초기 운동에너지 mv²/2가 중력 퍼텐셜 에너지 mgh로 바뀌어요."
+   ],
+   [
+    "일정 온도에서 N₂(g) + 3H₂(g) ⇌ 2NH₃(g)가 평형이다. 용기 부피를 줄이면?",
+    "NH₃ 생성 방향으로 이동하고 평형 상수는 같다",
+    "NH₃ 생성 방향으로 이동하고 평형 상수는 증가한다",
+    "반응물 방향으로 이동하고 평형 상수는 같다",
+    "평형은 이동하지 않고 평형 상수만 감소한다",
+    "압축하면 기체 몰 수가 더 작은 생성물 쪽으로 이동해요. 평형 상수는 온도가 일정하면 변하지 않아요."
+   ],
+   [
+    "독립적으로 유전되는 두 유전자 A와 B에서 AaBb × AaBb 교배를 한다. 두 형질 모두 열성일 확률은?",
+    "1/16",
+    "1/8",
+    "3/16",
+    "1/4",
+    "aa와 bb가 각각 1/4 확률이고 두 사건이 독립이므로 곱해요."
+   ],
+   [
+    "같은 별의 흡수선이 기준 파장보다 전체적으로 길어져 관측됐다. 이 결과로 추론할 수 있는 것은?",
+    "별이 관측자로부터 멀어지는 방향의 속도 성분이 있다",
+    "별이 관측자 쪽으로 다가온다",
+    "별의 온도가 반드시 올라갔다",
+    "별의 질량이 반드시 줄었다",
+    "도플러 효과에서 파장이 길어지는 적색편이는 멀어지는 운동의 증거예요."
+   ]
+  ],
+  "history": [
+   [
+    "‘왕이 러시아 공사관으로 거처를 옮겼다.’ 이 사건과 대한 제국 수립의 순서를 바르게 연결하면?",
+    "을미사변 → 아관파천 → 대한 제국 수립",
+    "아관파천 → 을미사변 → 대한 제국 수립",
+    "대한 제국 수립 → 을미사변 → 아관파천",
+    "을미사변 → 대한 제국 수립 → 아관파천",
+    "을미사변은 1895년, 아관파천은 1896년, 대한 제국 수립은 1897년이에요."
+   ],
+   [
+    "‘토지 소유자는 정해진 기간에 소유권을 신고하라.’ 일제의 이 사업을 비판적으로 해석한 것은?",
+    "소유권을 조사하는 과정에서 신고에 어려움을 겪은 사람의 권리가 약해질 수 있었다",
+    "소작농이 경작한 땅을 모두 소유하게 되었다",
+    "산미 증식 계획을 중단하기 위한 조치였다",
+    "모든 토지가 농민에게 균등하게 분배되었다",
+    "토지 조사 사업은 근대적 소유권을 정비했지만 관습상 권리나 신고에서 누락된 권리가 인정받기 어려웠어요."
+   ],
+   [
+    "‘기회 균등과 계획 경제를 바탕으로 정치·경제·교육의 균등을 실현한다.’ 이 구상과 관련 깊은 것은?",
+    "대한민국 임시 정부의 건국 강령",
+    "일제의 회사령",
+    "갑오개혁의 홍범 14조",
+    "독립 협회의 헌의 6조",
+    "조소앙의 삼균주의는 대한민국 임시 정부의 건국 강령에 반영됐어요."
+   ],
+   [
+    "제1차 미소 공동 위원회가 성과 없이 중단된 직접적인 쟁점은?",
+    "임시 정부 수립을 협의할 단체의 범위",
+    "한일 기본 조약에 담을 청구권의 범위",
+    "농지 개혁의 유상 매입과 분배 가격",
+    "유신 헌법의 대통령 선출 방식",
+    "모스크바 3국 외상 회의 결정에 반대한 단체도 협의에 참여시킬지 두고 양측이 대립했어요."
+   ]
+  ],
+  "english": [
+   [
+    "‘Although the survey found a link between sleep and grades, students who slept more also studied more regularly.’ 가장 타당한 해석은?",
+    "수면이 성적을 높였다고 단정하기 어렵다.",
+    "규칙적 공부는 성적과 무관하다.",
+    "모든 학생이 똑같이 공부했다.",
+    "수면과 성적 사이에 관련성이 없었다.",
+    "공부 습관이 함께 달랐으므로 관찰된 관련성만으로 수면의 효과를 분리할 수 없어요."
+   ],
+   [
+    "‘The new policy reduced waiting times on average. ___, patients in remote areas reported longer delays.’ 어울리는 연결어는?",
+    "However",
+    "Therefore",
+    "Similarly",
+    "For instance",
+    "전체 평균은 줄었지만 일부 지역은 늘었으므로 역접이에요."
+   ],
+   [
+    "Had the team checked the source, it ___ the error before publication. 빈칸은?",
+    "would have caught",
+    "would catch",
+    "will have caught",
+    "has caught",
+    "Had the team checked는 If the team had checked의 도치로, 과거 사실과 반대되는 가정이에요."
+   ],
+   [
+    "‘The tool was designed to save time, yet workers spent much of the day correcting its suggestions.’ 글에서 추론할 수 있는 것은?",
+    "도구의 실제 효율은 수정에 드는 시간까지 고려해야 한다.",
+    "도구는 제안을 전혀 내놓지 않았다.",
+    "작업자들은 도구 사용을 즉시 중단했다.",
+    "모든 제안의 정확도가 확인됐다.",
+    "도구를 쓰는 데 드는 검토·수정 시간이 실제 시간 절약에 영향을 줘요."
+   ]
+  ]
+ }
+};
+const currentSchoolLevel = () => Object.hasOwn(schoolLevels, D.gameLevel) ? D.gameLevel : 'high';
+
+function selectSchoolLevel(level) {
+ if (!Object.hasOwn(schoolLevels, level)) return;
+ D.gameLevel = level;
+ save();
+ render();
+ document.querySelector('[data-school-level="' + level + '"]')?.focus();
+}
+
+function startLevelQuiz(subject) {
+ if (!Object.hasOwn(levelSubjects, subject)) return;
+ const level = currentSchoolLevel();
+ const deck = shuffled(levelBanks[level][subject]);
+ G = {m:'quiz', type:'school', subject, title:schoolLevels[level].name + ' ' + levelSubjects[subject][0], i:0, n:deck.length, sc:0, deck};
+ nextQuiz();
+ render();
+}
+
+function schoolLevelHTML() {
+ const level = currentSchoolLevel();
+ return `<section class="card school-level">
+  <h2>문제 수준</h2>
+  <div class="school-level-buttons" role="group" aria-label="문제 수준">
+   ${Object.entries(schoolLevels).map(([key, item]) => `<button class="s" data-school-level="${key}" aria-pressed="${key === level}" onclick="selectSchoolLevel('${key}')">
+    <b>${item.name}</b><small>${item.description}</small>
+   </button>`).join('')}
+  </div>
+ </section>`;
+}
+
+function gameTile(title, category, description, action) {
+ return `<button class="game-tile" onclick="${action}">
+  <span class="game-category">${category}</span><h2>${title}</h2><p>${description}</p><span class="game-arrow" aria-hidden="true">↗</span>
+ </button>`;
+}
+
+gameMenu = function () {
+ const level = currentSchoolLevel();
+ const subjectTiles = Object.entries(levelSubjects).map(([key, [name, category]]) =>
+  gameTile(name, category, levelBanks[level][key].length + '문제 · 정답 해설', "startLevelQuiz('" + key + "')")).join('');
+ const commonActivities = games.filter(game => ['memory','pairs','cards','wrong','news'].includes(game[2]));
+ const practice = games.filter(game => !commonActivities.includes(game));
+ const gameTiles = list => list.map(([, title, , category, description, action]) => gameTile(title, category, description, action)).join('');
+ return sectionTitle('', '학습 놀이터') + schoolLevelHTML() +
+  `<div class="game-grid">${subjectTiles}</div>
+   <details class="card plan-details"><summary>암기 카드와 카드뉴스</summary><div class="game-grid">${gameTiles(commonActivities)}</div></details>
+   <details class="card plan-details"><summary>추가 연습</summary><div class="game-grid">${gameTiles(practice)}</div></details>
+   <section class="card"><h2>최근 플레이</h2>${(D.gameHistory || []).slice(0, 10).map(item =>
+    `<div class="history-line"><span>${esc(item.title)}</span><b>${item.score} / ${item.total}</b><small>${esc(item.date)}</small></div>`).join('') || '<p class="mu">한 판을 마치면 여기에 기록됩니다.</p>'}</section>`;
+};
+
 const randomInt=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
 function shuffled(a){const out=[...a];for(let i=out.length-1;i>0;i--){const j=randomInt(0,i);[out[i],out[j]]=[out[j],out[i]];}return out;}
 const GAME_COMPLETION_POINTS = 2;
@@ -100,6 +578,14 @@ function nextQuiz(){
  if(G.type==='unit'){const types=[['m','cm',100],['kg','g',1000],['시간','분',60],['L','mL',1000],['km','m',1000]];const [from,to,factor]=types[randomInt(0,4)];G.q=`${a} ${from} = 몇 ${to}?`;G.a=a*factor;G.explain=`1 ${from} = ${factor} ${to}이므로 ${a} × ${factor}입니다.`;}
  if(G.type==='sequence'){G.q=`${[0,1,2,3].map(i=>a+i*b).join(', ')}, 다음 수는?`;G.a=a+4*b;G.explain=`${b}씩 커지는 수열입니다.`;}
  G.options=null;
+ if (G.type === 'school') {
+  const [question, answer, ...rest] = G.deck[G.i];
+  G.q = question;
+  G.a = answer;
+  G.explain = rest.pop();
+  G.options = shuffled([answer, ...rest]);
+  return;
+ }
  if(['vocab','science','spelling','challenge'].includes(G.type)){
   const row=G.deck[G.i%G.deck.length];
   if(G.type==='vocab'){G.q=`‘${row[1]}’에 해당하는 영단어는?`;G.a=row[0];G.options=shuffled([row[0],...shuffled(vocabBank.filter(x=>x[0]!==row[0])).slice(0,3).map(x=>x[0])]);G.explain=`${row[0]}: ${row[1]}`;}
@@ -121,7 +607,7 @@ function advanceQuiz() {
  render();
 }
 function quizHTML(){
- if(G.i>=G.n)return gameBack()+`<section class="card result-card"><span class="eyebrow">한 판 완료</span><h1>${G.sc}<small> / ${G.n}</small></h1><p>${G.sc/G.n>=0.8?'감각이 좋네요. 다음에도 이어 가 봐요.':'틀린 문제는 오답노트에 모아 뒀어요.'}</p><p class="mu">${G.sc*3 + GAME_COMPLETION_POINTS}P 적립 · 서버에 기록됩니다</p><button onclick="startQuiz('${G.type}')">한 번 더</button><button class="s" onclick="go('game')">목록으로</button></section>`;
+ if(G.i>=G.n)return gameBack()+`<section class="card result-card"><span class="eyebrow">한 판 완료</span><h1>${G.sc}<small> / ${G.n}</small></h1><p>${G.sc/G.n>=0.8?'감각이 좋네요. 다음에도 이어 가 봐요.':'틀린 문제는 오답노트에 모아 뒀어요.'}</p><p class="mu">${G.sc*3 + GAME_COMPLETION_POINTS}P 적립 · 서버에 기록됩니다</p><button onclick="${G.type === 'school' ? "startLevelQuiz('" + G.subject + "')" : "startQuiz('" + G.type + "')"}">한 번 더</button><button class="s" onclick="go('game')">목록으로</button></section>`;
  return gameBack()+sectionTitle(G.title,`${G.i+1}번째 문제`)+`<section class="card quiz-card"><div class="bar"><i style="width:${G.i/G.n*100}%"></i></div><p class="mu">${G.i+1} / ${G.n} · ${G.sc}개 정답</p><h2 class="quiz-question">${esc(G.q)}</h2>${G.options?`<div class="quiz-options">${G.options.map((o,i)=>`<button ${G.answered?'disabled':''} class="${G.answered&&o===G.a?'correct':''}" onclick="submitQuiz(G.options[${i}])"><small>${i+1}</small>${esc(o)}</button>`).join('')}</div>`:`<form onsubmit="event.preventDefault();submitQuiz()"><label class="sr-only" for="quizAnswer">정답</label><input id="quizAnswer" autocomplete="off" placeholder="정답 입력${G.type==='fraction'?' (예: 3/4)':''}" ${G.answered?'disabled':''}><button class="w" ${G.answered?'disabled':''}>정답 확인</button></form>`}${G.answered?`<div class="answer-feedback ${G.correct?'correct':'incorrect'}"><b>${G.correct?'정답입니다.':'정답: '+esc(G.display||G.a)}</b><p>${esc(G.explain)}</p><button onclick="advanceQuiz()">${G.i===G.n-1?'결과 보기':'다음 문제'}</button></div>`:''}</section>`;
 }
 let memoryTimeout,pairTimeout;
