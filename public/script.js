@@ -290,10 +290,10 @@ const V = {
     const t = D.traits,
       x = D.tests,
       e = D.exam;
-    return `<section class="card"><h2>공부 과목</h2><ul class="subject-list" id="subjectList">${subjectListHTML()}</ul><form class="memo-entry" onsubmit="event.preventDefault();addSub()"><input id="ns" maxlength="80" required aria-label="새 과목 이름" placeholder="예: 한국사"><button>과목 추가</button></form><p class="mu" id="subjectStatus" role="status"></p></section><form onsubmit="event.preventDefault();analyze()"><div class="card"><h2>내 학습 정보</h2><label>공부 습관<input id="th" value="${esc(t.habit)}" placeholder="예: 밤에 집중이 잘 돼요"></label><label>잘하는 과목<input id="tg" value="${esc(t.good)}"></label><label>부족한 과목<input id="tw" value="${esc(t.weak)}"></label></div>
- <details class="card plan-details" ontoggle="if(this.isConnected) planTestsOpen=this.open" ${planTestsOpen?"open":""}><summary>테스트 결과 입력 <small class="mu">선택</small></summary>${linksHTML()}<p class="mu" style="margin:0 0 8px">위 사이트에서 해 본 결과를 100점 기준으로 적어 주세요.</p><div class="row"><label>암기력<input id="t1" type="number" min="0" max="100" value="${x.mem}"></label><label>문제풀이<input id="t2" type="number" min="0" max="100" value="${x.sol}"></label><label>사고력<input id="t3" type="number" min="0" max="100" value="${x.thk}"></label></div><p class="lt">사이트 결과가 점수가 아니면 아래에 적어도 돼요 (선택)</p><div class="row"><label>숫자 기억 (자리수)<input id="s1" type="number" min="1" max="30" value="${x.hn || ""}"></label><label>시각 기억 (레벨)<input id="s2" type="number" min="1" max="40" value="${x.hv || ""}"></label></div><div class="row"><label>칸 아카데미 단계<select id="s3"><option value="">선택 안 함</option>${["시도함", "익숙함", "능숙함", "마스터"].map((o, i) => `<option value="${i}" ${x.kh === String(i) ? "selected" : ""}>${o}</option>`).join("")}</select></label><label>커리어넷 수리·논리 (백분위)<input id="s4" type="number" min="1" max="100" value="${x.cn || ""}"></label></div></details>
+    return `<section class="card"><h2>공부 과목</h2><ul class="subject-list" id="subjectList">${subjectListHTML()}</ul><form class="memo-entry" onsubmit="event.preventDefault();addSub()"><input id="ns" maxlength="80" required aria-label="새 과목 이름" placeholder="예: 한국사"><button>과목 추가</button></form><p class="mu" id="subjectStatus" role="status"></p></section><section class="card"><h2>외부 테스트와 학습 사이트</h2><p class="mu">카드를 누르면 새 탭에서 열려요.</p>${linksHTML()}</section><form onchange="savePlanningInputs()" onsubmit="event.preventDefault();analyze()"><div class="card"><h2>내 학습 정보</h2><label>공부 습관<input id="th" value="${esc(t.habit)}" placeholder="예: 밤에 집중이 잘 돼요"></label><label>잘하는 과목<input id="tg" value="${esc(t.good)}"></label><label>부족한 과목<input id="tw" value="${esc(t.weak)}"></label></div>
+ <details class="card plan-details" ontoggle="if(this.isConnected) planTestsOpen=this.open" ${planTestsOpen?"open":""}><summary>테스트 결과 입력 <small class="mu">선택</small></summary><p class="mu">외부 테스트 결과를 입력하세요.</p><div class="row"><label>암기력<input id="t1" type="number" min="0" max="100" value="${x.mem}"></label><label>문제풀이<input id="t2" type="number" min="0" max="100" value="${x.sol}"></label><label>사고력<input id="t3" type="number" min="0" max="100" value="${x.thk}"></label></div><p class="lt">사이트 결과가 점수가 아니면 아래에 적어도 돼요 (선택)</p><div class="row"><label>숫자 기억 (자리수)<input id="s1" type="number" min="1" max="30" value="${x.hn || ""}"></label><label>시각 기억 (레벨)<input id="s2" type="number" min="1" max="40" value="${x.hv || ""}"></label></div><div class="row"><label>칸 아카데미 단계<select id="s3"><option value="">선택 안 함</option>${["시도함", "익숙함", "능숙함", "마스터"].map((o, i) => `<option value="${i}" ${x.kh === String(i) ? "selected" : ""}>${o}</option>`).join("")}</select></label><label>커리어넷 수리·논리 (백분위)<input id="s4" type="number" min="1" max="100" value="${x.cn || ""}"></label></div></details>
  <div class="card"><h2>시험 일정</h2><div class="row"><label>시험 날짜<input id="ed" type="date" value="${e.date}"></label><label>하루 공부 시간(시간)<input id="eh" type="number" min="1" max="12" value="${e.hrs}"></label></div><button class="w">분석하고 계획 만들기</button></div></form>
- ${D.report || ""}${D.plan.length ? `<div class="card"><h3>기본 공부 계획</h3><p class="mu">입력한 시험 일정과 공부 시간에 맞춘 기본 계획이에요. 완료하면 5P를 받아요.</p>${D.plan.map((p, i) => `<label class="chk"><input type="checkbox" ${p.d ? "checked disabled" : ""} onchange="donePlan(${i})"><span>${esc(p.t)}${p.w ? `<small class="mu" style="display:block">${esc(p.w)}</small>` : ""}</span></label>`).join("")}</div>` : ""}`;
+ ${D.report || ""}${aiPlanHTML()}${D.plan.length ? `<details class="card plan-details" open><summary>내 공부 계획 <small class="mu">완료하면 +5P</small></summary>${D.plan.map((p, i) => `<label class="chk"><input type="checkbox" ${p.d ? "checked disabled" : ""} onchange="donePlan(${i})"><span>${esc(p.t)}${p.w ? `<small class="mu" style="display:block">${esc(p.w)}</small>` : ""}</span></label>`).join("")}</details>` : ""}`;
   },
   game() {
     if (G.m == "math") return gMath();
@@ -780,18 +780,7 @@ const subjKey = (n) =>
             : "기본";
 const phase = (d) => PH.find((x) => d > x[0]) || PH[4];
 function analyze() {
-  const g = (id) => $(id).value;
-  D.traits = { habit: g("#th"), good: g("#tg"), weak: g("#tw") };
-  D.tests = {
-    mem: g("#t1"),
-    sol: g("#t2"),
-    thk: g("#t3"),
-    hn: g("#s1"),
-    hv: g("#s2"),
-    kh: g("#s3"),
-    cn: g("#s4"),
-  };
-  D.exam = { date: g("#ed"), hrs: Math.max(1, Math.min(12, +g("#eh") || 2)) };
+  savePlanningInputs();
   const Z = D.tests,
     has = (k) => Z[k] !== "" && Z[k] != null,
     sl = (v) => (v < 40 ? 0 : v < 70 ? 1 : 2),
@@ -833,11 +822,11 @@ function analyze() {
       };
     })
     .sort((a, b) => a.avg - b.avg);
-  const tot = Object.values(D.logs).reduce((a, b) => a + b, 0),
-    byT = [...D.subs].sort((a, b) => (D.logs[a] || 0) - (D.logs[b] || 0));
+  const byT = [...D.subs].sort((a, b) => (D.logs[a] || 0) - (D.logs[b] || 0));
   const wk = D.subs.find((x) => D.traits.weak.includes(x)),
     focus = wk || byT[0],
     second = byT.find((x) => x != focus) || focus;
+  const hasStudyRecords = Object.values(D.logs).some(seconds => seconds > 0);
   const dl = D.exam.date
       ? Math.ceil((new Date(D.exam.date) - new Date(today())) / 864e5)
       : null,
@@ -862,6 +851,7 @@ function analyze() {
     f = Math.round((tt * 0.5) / 5) * 5,
     s2 = Math.round((tt * 0.3) / 5) * 5,
     r = tt - f - s2;
+  const completed = new Set(D.plan.filter(task => task.d).map(task => task.t));
   D.plan = [];
   for (let i = 0; i < days; i++) {
     const dt = new Date();
@@ -882,17 +872,12 @@ function analyze() {
       },
     );
     D.plan.push({
-      t: `${l} ${r}분 · 오늘 배운 것을 책 덮고 백지에 써 보기`,
-      w: `${M.retr.n}: ${M.retr.w}`,
+      t: `${l} ${r}분 · ${i === 1 || i === 3 ? "이전에 공부한 내용 다시 떠올리기" : "오늘 배운 것을 책 덮고 백지에 써 보기"}`,
+      w: i === 1 || i === 3 ? M.spc.h : M.retr.h,
       d: 0,
     });
-    if (i == 1 || i == 3)
-      D.plan.push({
-        t: `${l} 10분 · ${i == 1 ? "어제" : "3일 전"} 공부한 내용 다시 떠올리기`,
-        w: `${M.spc.n}: ${M.spc.w}`,
-        d: 0,
-      });
   }
+  D.plan.forEach(task => { if (completed.has(task.t)) task.d = 1; });
   const lab = ["보완이 필요해요", "보통이에요", "좋은 편이에요"],
     top = [];
   if (ab.length)
@@ -900,33 +885,23 @@ function analyze() {
       `${ab[0].n} 보완: ${M[AB[ab[0].k][ab[0].l].m[0]].n}부터 시작해 보세요.`,
     );
   top.push(
-    `${focus} 과목에 집중하고, ${wk ? "직접 부족하다고 쓴 과목이에요." : "공부 시간이 가장 적은 과목이에요."}`,
+    `${focus} 우선 · ${wk ? "직접 입력한 약점 과목" : hasStudyRecords ? "공부 기록이 가장 적은 과목" : "등록한 첫 과목"}`,
   );
+  if (D.traits.good.trim()) top.push(`직접 입력한 강점 · ${D.traits.good.trim()}`);
   top.push(`현재 단계는 "${P[1]}"예요. ${P[2]}`);
   const hab = HB.filter((h) =>
     h.r.test(D.traits.habit + " " + D.traits.weak),
   ).map((h) => h.a);
   D.sum = top.join("\n");
-  D.report = `<div id="rep"></div><div class="card"><h3 class="ah">${svg("spark", 18)} 스터디 AI의 분석</h3>${ab.length ? ab.map((a) => `<p style="margin:12px 0 0"><b>${a.n}</b> · ${lab[a.l]}<br><span class="mu">근거: ${a.why}</span><br><span class="mu">${AB[a.k][a.l].d}</span></p>`).join("") : '<p class="mu">테스트 결과를 입력하면 능력별 분석이 나와요.</p>'}${
-    tot
-      ? `<p style="margin:12px 0 0"><b>공부 시간</b><br><span class="mu">${[
-          ...D.subs,
-        ]
-          .sort((a, b) => (D.logs[b] || 0) - (D.logs[a] || 0))
-          .slice(0, 3)
-          .map((x) => `${esc(x)} ${Math.floor((D.logs[x] || 0) / 60)}분`)
-          .join(" · ")} · 가장 적은 과목은 ${esc(byT[0])}이에요.</span></p>`
-      : ""
-  }${hab.length ? `<p style="margin:12px 0 0"><b>습관 조언</b></p>${hab.map((h) => `<p class="mu" style="margin:4px 0 0">${h}</p>`).join("")}` : ""}</div>
- <div class="card"><h3>우선순위</h3>${top.map((x, i) => `<p style="margin:${i ? 8 : 10}px 0 0">${i + 1}. ${esc(x)}</p>`).join("")}</div>
- <div class="card"><h3>추천 학습법</h3>${ms
-   .slice(0, 6)
-   .map(
-     (k) =>
-       `<div style="margin-top:14px"><b>${M[k].n}</b>${M[k].m ? ` <span class="mu">하루 ${M[k].m}분</span>` : ""}<br>${M[k].h}<br><span class="mu">왜 효과가 있나요? ${M[k].w}</span></div>`,
-   )
-   .join("")}</div>
- <div class="card"><h3>이 분석에 대해</h3><p class="mu" style="margin:0">입력한 점수와 습관, 내장된 학습법 자료로 만든 일반적인 안내예요. 개인 진단이나 검사 결과를 대신하지 않아요. 자료는 학습 과학 연구에서 널리 알려진 원칙을 정리한 것이라, 학교 선생님과 함께 확인하면 더 좋아요.</p></div>`;
+  D.report = `<section class="card analysis-summary" id="rep"><h2>학습 분석</h2>
+    <ul>${top.map(tip => `<li>${esc(tip)}</li>`).join("")}</ul>
+    <details class="plan-details"><summary>테스트 결과 해석과 공부법</summary>
+      ${ab.length ? ab.map(a => `<p><b>${a.n} · ${lab[a.l]}</b><br><small class="mu">${esc(a.why)} · ${AB[a.k][a.l].d}</small></p>`).join("") : '<p class="mu">외부 테스트 결과를 입력하면 능력별 분석을 볼 수 있어요.</p>'}
+      ${hab.slice(0, 2).map(tip => `<p class="mu">${tip}</p>`).join("")}
+      ${ms.slice(0, 3).map(key => `<p><b>${M[key].n}</b><br><small class="mu">${M[key].h}</small></p>`).join("")}
+    </details>
+    <details class="plan-details"><summary>추천 학습 자료</summary>${linksHTML(ab[0]?.k === "mem" ? [LK[0]] : [LK[1]])}</details>
+  </section>`;
   D.analysisDone = true;
   save();
   render();
@@ -975,9 +950,27 @@ const LK = [
     ],
   ],
 ];
-function linksHTML() {
-  return `<div class="card"><h3>1. 외부 사이트에서 능력 확인하기</h3><p class="lt" style="margin:4px 0 0">누르면 새 탭에서 열려요. 해 본 뒤 결과를 아래에 적어 주세요.</p>${LK.map((g) => `<p class="lt"><b style="color:var(--tx)">${g[0]}</b></p>${g[1].map((l) => `<a class="lk" href="${l[2]}" target="_blank" rel="noopener"><span>${l[0]}<small>${l[1]}</small></span>${svg("out", 18)}</a>`).join("")}`).join("")}</div>`;
+function linksHTML(groups = LK) {
+  const illustrations = ["🧩", "🔢", "📐", "🎬", "✏️", "🧠"];
+  return `<div class="resource-grid">${groups.flatMap(([, links]) => links.map((link) => {
+    const [name, description, url] = link;
+    const index = LK.flatMap(([, entries]) => entries).indexOf(link);
+    return `<a class="resource-link" href="${url}" target="_blank" rel="noopener">
+      <span class="resource-art" data-art="${index}" aria-hidden="true">${illustrations[index]}</span>
+      <strong>${name}</strong><small>${description}</small>
+    </a>`;
+  })).join("")}</div>`;
 }
+
+function savePlanningInputs() {
+  const field = id => $(id).value;
+  D.traits = {habit:field("#th"), good:field("#tg"), weak:field("#tw")};
+  D.tests = {mem:field("#t1"), sol:field("#t2"), thk:field("#t3"), hn:field("#s1"),
+    hv:field("#s2"), kh:field("#s3"), cn:field("#s4")};
+  D.exam = {date:field("#ed"), hrs:Math.max(1, Math.min(12, +field("#eh") || 2))};
+  save();
+}
+
 
 /* ===== AI 도우미 탭 : 대화 기록 · 새 대화 · 공부 모드 on/off ===== */
 
@@ -988,7 +981,7 @@ const curChat = () => chats().find((c) => c.id == AI.cur);
 function aiPlanHTML() {
   return `<details class="card plan-details" ${D.aiPlanText ? "open" : ""}>
     <summary>AI 맞춤 공부 계획</summary>
-    <p class="mu">계획 탭에서 분석을 마친 뒤, 학습 정보에 맞춰 계획을 구체화할 수 있어요.</p>
+    <p class="mu">학습 분석과 시험 일정을 반영해 계획을 구체화해요.</p>
     <button id="aiPlanBtn" onclick="generateAIPlan()">${D.aiPlanText ? "AI 계획 다시 만들기" : "AI 계획 만들기"}</button>
     <p id="aiPlanStatus" class="mu" role="status"></p>
     ${D.aiPlanText ? `<div class="ai-plan-text">${esc(D.aiPlanText)}</div>` : ""}
@@ -999,7 +992,7 @@ function aiPage() {
     top = `<div class="aih"><b>물어보세요</b><span><button class="s" onclick="go('an')">스케줄</button> <button class="s" onclick="aiView('hist')">기록</button> <button class="s" onclick="aiNew()">새 대화</button></span></div>`;
   if (AI.v == "hist") return top + histHTML();
   return (
-    top + aiPlanHTML() +
+    top +
     `<div class="card aiset"><label class="sw"><span><b>공부 모드</b><small>${s.study ? "공부 관련 질문에만 답해요" : "제한 없이 자유롭게 대화해요"}</small></span><input type="checkbox" role="switch" aria-label="공부 모드" ${s.study ? "checked" : ""} onchange="aiSet().study=this.checked;save();render()"></label><label class="sw"><span><b>답변 방식</b><small>설명 길이를 선택하세요</small></span><select onchange="aiSet().tier=this.value;save()">${[
       ["quick", "짧게"],
       ["default", "기본"],
@@ -1155,10 +1148,10 @@ async function generateAIPlan() {
 1. 자기평가와 테스트 결과를 구분하고, 테스트가 없는 능력은 추측하지 말 것.
 2. 시험 날짜와 하루 공부 가능 시간을 우선 반영할 것. 날짜가 없으면 앞으로 7일 계획으로 제안할 것.
 3. 부족한 과목/능력부터 우선순위를 정하고, 매일 과목·분량·공부 방법·예상 시간을 제시할 것.
-4. 공부 가능 시간 합계를 넘기지 말 것. 중간 휴식도 고려할 것.
+4. 공부 가능 시간 합계를 넘기지 말 것. 중간 휴식도 고려하고, 한눈에 보이도록 날짜별 한 줄로 쓸 것.
 5. 외부 테스트 점수는 참고 자료일 뿐 확정적인 능력 진단처럼 말하지 말 것.
 6. 마지막에 관련 학습 자료 추천을 최대 3개 제시하되, 실제로 확인하지 않은 링크는 만들지 말 것. 사이트 이름만 추천해도 됨.
-7. 형식: '분석 요약', '우선순위', '하루 공부 계획', '추천 학습법/자료', '실행 팁' 제목을 사용하고 간결하게 작성할 것.`;
+7. 우선 과목, 날짜별 계획, 추천 자료만 짧게 작성할 것.`;
   try {
     const response = await fetch("/api/chat", {
       method: "POST",
@@ -1193,7 +1186,7 @@ function donePlan(i) {
 
 /* 게임 공통 */
 function result(back) {
-  return `<div class="card" style="text-align:center"><h2>${G.sc} / ${G.n} 정답!</h2><p class="mu">포인트 ${G.sc * 3}P 획득</p><div class="row">${G.sc < G.n ? `<button class="s" onclick="G={m:'wrong'};render()">오답노트 보기</button>` : ""}<button onclick="G={m:''};render()">게임 목록</button></div></div>`;
+  return `<div class="card" style="text-align:center"><h2>${G.sc} / ${G.n} 정답!</h2><p class="mu">정답 ${G.sc * 3}P · 완료 +${GAME_COMPLETION_POINTS}P</p><div class="row">${G.sc < G.n ? `<button class="s" onclick="G={m:'wrong'};render()">오답노트 보기</button>` : ""}<button onclick="G={m:''};render()">게임 목록</button></div></div>`;
 }
 const shuf = (a) => [...a].sort(() => Math.random() - 0.5);
 function addWrong(k, q, a, y) {

@@ -56,10 +56,22 @@ body[data-page]:not(:has(.auth-page)) nav button.on { color: var(--ac); }
 .garden-card .growth-row { padding: 0 0 10px; }
 .garden-card progress { width: 100%; height: 12px; accent-color: var(--ac); }
 .garden-card .lt { margin-bottom: 0; }
-.study-timer .ct { margin-bottom: 4px; }
-.study-timer select { margin: 0; min-width: 0; }
-.timer-running { align-items: center; justify-content: space-between; }
-.timer-running b { overflow-wrap: anywhere; }
+.resource-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.resource-link { display: grid; align-content: start; gap: 5px; padding: 8px 8px 11px; border: 1px solid var(--bd); border-radius: 12px; color: var(--tx); text-decoration: none; }
+.resource-link:hover { border-color: var(--ac); }
+.resource-link strong, .resource-link small { padding: 0 3px; overflow-wrap: anywhere; }
+.resource-link strong { font-size: 13px; line-height: 1.45; }
+.resource-link small { color: var(--mu); font-size: 11px; }
+.resource-art { display: grid; place-items: center; min-height: 66px; background: #e9f2e6; border-radius: 7px; font-size: 30px; }
+.resource-art[data-art="1"], .resource-art[data-art="3"] { background: #faebde; }
+.resource-art[data-art="2"], .resource-art[data-art="5"] { background: #e5edf8; }
+.analysis-summary ul, .profile-logs ul { padding-left: 1.2em; }
+.analysis-summary details { border-top: 1px solid var(--bd); padding: 10px 0; }
+.growth-stage { justify-content: center; flex: 0 0 58px; height: 58px; border-radius: 16px; background: #eaf2e6; }
+.profile-logs { margin-top: 16px; }
+@media (max-width: 540px) {
+  .resource-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+}
 .game-category { color: var(--ac); font-size: 12px; }
 .game-tile { min-height: 135px; }
 .game-tile h2 { margin-top: 8px; }
