@@ -1,24 +1,24 @@
 /* 화면 개편과 추가 학습 활동. 기존 계획·AI·암기 카드 기능을 이어 사용합니다. */
-const sectionTitle=(eyebrow,title,desc='')=>`<div class="page-heading"><p class="eyebrow">${eyebrow}</p><h1>${title}</h1>${desc?`<p class="mu">${desc}</p>`:''}</div>`;
+const sectionTitle=(eyebrow,title,desc='')=>`<div class="page-heading">${eyebrow ? `<p class="eyebrow">${eyebrow}</p>` : ""}<h1>${title}</h1>${desc?`<p class="mu">${desc}</p>`:''}</div>`;
 const gameBack=()=>'<button class="s back" onclick="go(\'game\')">← 학습 놀이터</button>';
 V.home=function(){
- const minutes=Math.floor(Object.values(D.logs || {}).reduce((total, seconds) => total + seconds, 0)/60),todo=D.plan.map((p,i)=>({...p,index:i})).filter(p=>!p.d).slice(0,4);
- const count=D.plan.filter(p=>p.d).length,stageIndex=stage(),pet=PETS[D.pet];
- return `<div class="home-title"><div><p class="eyebrow">${new Intl.DateTimeFormat('ko-KR',{month:'long',day:'numeric',weekday:'long'}).format(new Date())}</p><h1>${esc(cur)}의 공부방</h1></div><div class="avatar">${esc(cur.slice(0,1))}</div></div>
+ const minutes=Math.floor(totalStudySeconds()/60),todo=D.plan.map((p,i)=>({...p,index:i})).filter(p=>!p.d).slice(0,4);
+ const count=D.plan.filter(p=>p.d).length;
+ return `<div class="home-title"><div><p class="eyebrow">${new Intl.DateTimeFormat('ko-KR',{month:'long',day:'numeric',weekday:'long'}).format(new Date())}</p><h1>${esc(cur)}의 공부방</h1></div></div>
+ ${studyTimerHTML()}
  <div class="stat-strip"><div><small>누적 공부</small><b>${minutes}<em>분</em></b></div><div><small>완료한 계획</small><b>${count}<em>개</em></b></div><div><small>누적 출석</small><b>${D.att.length}<em>일</em></b></div></div>
  <section class="card"><div class="ct"><h2>해야 할 일</h2><button class="text-btn" onclick="go('an')">계획 관리 →</button></div>${todo.length?todo.map(p=>`<label class="todo-line"><input type="checkbox" onchange="donePlan(${p.index})"><span>${esc(p.t)}</span></label>`).join(''):'<div class="empty-state"><p>오늘의 작은 목표를 정해 보세요.</p><button class="s" onclick="go(\'an\')">계획 만들기</button></div>'}</section>
- <section class="shortcut-grid"><button onclick="go('ai')"><span class="shortcut-icon">?</span><b>질문하기</b><small>막힌 개념을 풀어 봐요</small></button><button onclick="go('game')"><span class="shortcut-icon">＋</span><b>학습 놀이터</b><small>짧게 풀고 다시 집중</small></button><button onclick="gc()"><span class="shortcut-icon">Aa</span><b>암기 카드</b><small>오늘 배운 내용 복습</small></button></section>
+ <section class="shortcut-grid"><button onclick="go('game')"><span class="shortcut-icon">＋</span><b>학습 놀이터</b><small>짧게 풀고 다시 집중</small></button><button onclick="gc()"><span class="shortcut-icon">Aa</span><b>암기 카드</b><small>오늘 배운 내용 복습</small></button></section>
  <section class="card"><div class="ct"><h2>공부 메모</h2><small class="mu">계정에 저장</small></div><form class="memo-entry" onsubmit="event.preventDefault();addNote()"><input id="memoText" maxlength="160" placeholder="잊기 전에 적어 두기"><button>추가</button></form><div class="memo-list">${(D.notes||[]).slice().reverse().map((n,i)=>`<div class="memo-item"><span>${esc(n.text)}</span><button class="icon-btn" aria-label="메모 삭제" onclick="delNote(${D.notes.length-1-i})">×</button></div>`).join('')||'<p class="mu">아직 적어 둔 메모가 없어요.</p>'}</div></section>
- <section class="growth-row"><span>${growthIcon(D.pet,stageIndex)}</span><div><b>나의 ${pet.t[stageIndex]}</b><p class="mu">공부와 복습을 하면 함께 자라요 · ${D.pts}P</p></div><button class="s" onclick="setPet(D.pet==='tree'?'animal':'tree')">바꾸기</button></section>
- <section class="card account-panel"><div class="ct"><h2>내 계정과 기록</h2><span id="accountSync" class="mu">${esc(syncMessage)}</span></div><div class="row"><button class="s" onclick="downloadRecords()">기록 내려받기</button><button class="s" onclick="flushSave()">저장 재시도</button></div><div class="row"><button class="text-btn" onclick="importLegacy()">이 브라우저의 이전 기록 가져오기</button><button class="text-btn" onclick="openRecoverySettings()">복구 코드 발급</button><button class="text-btn" onclick="logout()">계정 전환 · 로그아웃</button></div><p class="lt">다른 기기에서는 같은 아이디로 로그인하세요. 동시 편집 충돌 시 덮어쓰지 않고 저장을 멈춥니다.</p></section>`;
+ ${gardenHTML()}`;
 };
 const originalRender=render;
 render=function(){
  originalRender();if(!D)return;
  document.body.dataset.page=tab;
- const header=$('header');header.innerHTML=`<a class="wordmark" href="#" onclick="event.preventDefault();go('home')">쑥쑥<span>스터디</span></a><div class="header-right"><button id="syncStatus" class="sync-status" onclick="flushSave()">${esc(syncMessage)}</button><span class="point">${D.pts} P</span></div>`;
+ const header=$('header');header.innerHTML=`<a class="wordmark" href="#" onclick="event.preventDefault();go('home')">쑥쑥<span>스터디</span></a><div class="header-right"><button id="syncStatus" class="sync-status" onclick="flushSave()">${esc(syncMessage)}</button><span class="point">${D.pts.toLocaleString("ko-KR")} P</span><button class="avatar" aria-label="내 프로필" aria-current="${tab === "profile" ? "page" : "false"}" onclick="go('profile')">${avatarArt()}</button></div>`;
  const nav=$('nav');nav.innerHTML=[['home','홈'],['an','계획'],['game','놀이터'],['ai','질문']].map(([key,name])=>`<button class="${tab===key?'on':''}" onclick="go('${key}')">${svg(key)}<span>${name}</span></button>`).join('');
- if(tab==='game'&&G.m&&!['news','quiz','memory','pairs'].includes(G.m))$('main').insertAdjacentHTML('afterbegin',gameBack());
+ if(tab==='game'&&G.m&&!['news','newsQuiz','quiz','memory','pairs'].includes(G.m))$('main').insertAdjacentHTML('afterbegin',gameBack());
  updateSync();
 };
 const games=[
@@ -37,10 +37,11 @@ const games=[
  ['13','한국사 퀴즈','history','과목','시대와 사건을 짚어 봐요','startHist()'],
  ['14','암기 카드','cards','복습','직접 만들거나 기본 카드 복습','gc()'],
  ['15','오답 다시 보기','wrong','복습','놓친 문제만 모아서',"G={m:'wrong'};render()"],
- ['16','한 장씩 개념 읽기','news','복습','짧은 카드뉴스로 공부 습관 정리','startNews(0)']
+ ['16','한 장씩 개념 읽기','news','복습','카드뉴스를 읽고 응용 문제 풀기','startNews(0)'],
+ ['17','심화 응용 퀴즈','challenge','사고력','확률·농도·자료 해석을 여러 단계로 풀기',"startQuiz('challenge')"]
 ];
 let gameFilter='전체';
-gameMenu=function(){const list=games.filter(g=>gameFilter==='전체'||g[3]===gameFilter);return sectionTitle('STUDY BREAK','짧게 풀고, 가볍게 복습','계산부터 기억력까지. 한 판씩 골라 보세요.')+`<div class="filter-row">${['전체','계산','사고력','과목','복습'].map(f=>`<button class="${gameFilter===f?'selected':''}" onclick="gameFilter='${f}';render()">${f}</button>`).join('')}</div><div class="game-grid">${list.map(g=>`<button class="game-tile" onclick="${g[5]}"><span class="game-no">${g[0]} <small>${g[3]}</small></span><h2>${g[1]}</h2><p>${g[4]}</p><span class="game-arrow">↗</span></button>`).join('')}</div><section class="card"><div class="ct"><h2>최근 플레이</h2><small class="mu">최근 10회</small></div>${(D.gameHistory||[]).slice(0,10).map(h=>`<div class="history-line"><span>${esc(h.title)}</span><b>${h.score} / ${h.total}</b><small>${esc(h.date)}</small></div>`).join('')||'<p class="mu">한 판을 마치면 여기에 기록됩니다.</p>'}</section>`;};
+gameMenu=function(){const list=games.filter(g=>gameFilter==='전체'||g[3]===gameFilter);return sectionTitle('','학습 놀이터')+`<div class="filter-row">${['전체','계산','사고력','과목','복습'].map(f=>`<button class="${gameFilter===f?'selected':''}" onclick="gameFilter='${f}';render()">${f}</button>`).join('')}</div><div class="game-grid">${list.map(g=>`<button class="game-tile" onclick="${g[5]}"><span class="game-category">${g[3]}</span><h2>${g[1]}</h2><p>${g[4]}</p><span class="game-arrow">↗</span></button>`).join('')}</div><section class="card"><div class="ct"><h2>최근 플레이</h2><small class="mu">최근 10회</small></div>${(D.gameHistory||[]).slice(0,10).map(h=>`<div class="history-line"><span>${esc(h.title)}</span><b>${h.score} / ${h.total}</b><small>${esc(h.date)}</small></div>`).join('')||'<p class="mu">한 판을 마치면 여기에 기록됩니다.</p>'}</section>`;};
 const randomInt=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
 function shuffled(a){const out=[...a];for(let i=out.length-1;i>0;i--){const j=randomInt(0,i);[out[i],out[j]]=[out[j],out[i]];}return out;}
 function recordGame(title,score,total){D.gameHistory||=[];D.gameHistory.unshift({title,score,total,date:today()});D.gameHistory=D.gameHistory.slice(0,100);save();}
@@ -71,7 +72,21 @@ const spellingBank=[
  ['올바른 표현을 고르세요.','역할','역활','역활이요오','역핼','맡은 일을 뜻하는 단어는 ‘역할’입니다.'],
  ['올바른 표현을 고르세요.','돼요','되요','됍요','됀요','‘되어요’를 줄이면 ‘돼요’가 됩니다.']
 ];
-function startQuiz(type){const title=games.find(g=>g[2]===type)[1];G={m:'quiz',type,title,i:0,n:10,sc:0,answered:false,deck:shuffled(type==='science'?scienceBank:type==='spelling'?spellingBank:vocabBank)};nextQuiz();render();}
+const challengeBank = [
+ ['빨간 공 3개와 파란 공 2개 중 공을 두 개 꺼낸다. 첫 공을 돌려놓지 않을 때 두 공이 같은 색일 확률은?', '2/5', '1/5', '12/25', '3/5', '전체 10쌍 중 빨간색끼리 3쌍, 파란색끼리 1쌍이므로 4/10 = 2/5입니다.'],
+ ['소금물 200g의 농도는 8%다. 물만 증발시켜 농도를 10%로 만들려면 물을 몇 g 줄여야 할까?', '40g', '20g', '16g', '50g', '소금 16g은 그대로예요. 최종 용액은 16 ÷ 0.10 = 160g이므로 40g을 줄입니다.'],
+ ['A반 20명의 평균은 72점, B반 30명의 평균은 82점이다. 두 반을 합친 평균은?', '78점', '77점', '79점', '80점', '인원수를 반영해 (20 × 72 + 30 × 82) ÷ 50 = 78점입니다.'],
+ ['어떤 수에 25%를 더한 뒤 그 결과의 20%를 빼면 96이 된다. 처음 수는?', '96', '92', '100', '120', '1.25 × 0.8 = 1이므로 결과는 처음 수와 같습니다.'],
+ ['같은 거리를 갈 때는 시속 60km, 돌아올 때는 시속 40km였다. 왕복 평균 속력은?', '48km/h', '50km/h', '46km/h', '52km/h', '편도 120km로 생각하면 갈 때 2시간, 올 때 3시간입니다. 240 ÷ 5 = 48km/h예요.'],
+ ['식물의 빛 세기에 따른 성장 차이를 확인하려 한다. 실험에서 함께 바꾸면 결과 해석이 가장 어려워지는 조건은?', '물의 양', '화분에 붙인 번호', '기록표 글씨체', '측정 결과의 단위 표기 방식', '물의 양도 성장에 영향을 줍니다. 물과 빛을 동시에 바꾸면 어떤 요인이 차이를 만들었는지 구분하기 어려워요.']
+];
+function startQuiz(type) {
+ const title = games.find(game => game[2] === type)[1];
+ const bank = {science:scienceBank, spelling:spellingBank, challenge:challengeBank}[type] || vocabBank;
+ G = {m:'quiz', type, title, i:0, n:type === 'challenge' ? bank.length : 10, sc:0, answered:false, deck:shuffled(bank)};
+ nextQuiz();
+ render();
+}
 function nextQuiz(){
  G.answered=false;G.answer='';let a=randomInt(2,12),b=randomInt(2,12);
  if(G.type==='fraction'){const n=randomInt(2,10),x=randomInt(1,n-1),y=randomInt(1,n-1);G.q=`${x}/${n} + ${y}/${n} = ?`;G.a=(x+y)/n;G.display=`${x+y}/${n}`;G.explain=`분모가 같으므로 분자는 ${x}+${y}, 분모는 ${n} 그대로입니다. 소수나 분수로 답할 수 있어요.`;}
@@ -80,7 +95,7 @@ function nextQuiz(){
  if(G.type==='unit'){const types=[['m','cm',100],['kg','g',1000],['시간','분',60],['L','mL',1000],['km','m',1000]];const [from,to,factor]=types[randomInt(0,4)];G.q=`${a} ${from} = 몇 ${to}?`;G.a=a*factor;G.explain=`1 ${from} = ${factor} ${to}이므로 ${a} × ${factor}입니다.`;}
  if(G.type==='sequence'){G.q=`${[0,1,2,3].map(i=>a+i*b).join(', ')}, 다음 수는?`;G.a=a+4*b;G.explain=`${b}씩 커지는 수열입니다.`;}
  G.options=null;
- if(['vocab','science','spelling'].includes(G.type)){
+ if(['vocab','science','spelling','challenge'].includes(G.type)){
   const row=G.deck[G.i%G.deck.length];
   if(G.type==='vocab'){G.q=`‘${row[1]}’에 해당하는 영단어는?`;G.a=row[0];G.options=shuffled([row[0],...shuffled(vocabBank.filter(x=>x[0]!==row[0])).slice(0,3).map(x=>x[0])]);G.explain=`${row[0]}: ${row[1]}`;}
   else{G.q=row[0];G.a=row[1];G.options=shuffled(row.slice(1,5));G.explain=row[5];}
@@ -95,7 +110,7 @@ function submitQuiz(value){
 }
 function advanceQuiz(){if(!G.answered)return;G.i++;if(G.i<G.n){delete G.display;nextQuiz();}else recordGame(G.title,G.sc,G.n);render();}
 function quizHTML(){
- if(G.i>=G.n)return gameBack()+`<section class="card result-card"><span class="eyebrow">한 판 완료</span><h1>${G.sc}<small> / ${G.n}</small></h1><p>${G.sc>=8?'감각이 좋네요. 다음에도 이어 가 봐요.':'틀린 문제는 오답노트에 모아 뒀어요.'}</p><p class="mu">${G.sc*3}P 적립 · 서버에 기록됩니다</p><button onclick="startQuiz('${G.type}')">한 번 더</button><button class="s" onclick="go('game')">목록으로</button></section>`;
+ if(G.i>=G.n)return gameBack()+`<section class="card result-card"><span class="eyebrow">한 판 완료</span><h1>${G.sc}<small> / ${G.n}</small></h1><p>${G.sc/G.n>=0.8?'감각이 좋네요. 다음에도 이어 가 봐요.':'틀린 문제는 오답노트에 모아 뒀어요.'}</p><p class="mu">${G.sc*3}P 적립 · 서버에 기록됩니다</p><button onclick="startQuiz('${G.type}')">한 번 더</button><button class="s" onclick="go('game')">목록으로</button></section>`;
  return gameBack()+sectionTitle(G.title,`${G.i+1}번째 문제`)+`<section class="card quiz-card"><div class="bar"><i style="width:${G.i/G.n*100}%"></i></div><p class="mu">${G.i+1} / ${G.n} · ${G.sc}개 정답</p><h2 class="quiz-question">${esc(G.q)}</h2>${G.options?`<div class="quiz-options">${G.options.map((o,i)=>`<button ${G.answered?'disabled':''} class="${G.answered&&o===G.a?'correct':''}" onclick="submitQuiz(G.options[${i}])"><small>${i+1}</small>${esc(o)}</button>`).join('')}</div>`:`<form onsubmit="event.preventDefault();submitQuiz()"><label class="sr-only" for="quizAnswer">정답</label><input id="quizAnswer" autocomplete="off" placeholder="정답 입력${G.type==='fraction'?' (예: 3/4)':''}" ${G.answered?'disabled':''}><button class="w" ${G.answered?'disabled':''}>정답 확인</button></form>`}${G.answered?`<div class="answer-feedback ${G.correct?'correct':'incorrect'}"><b>${G.correct?'정답입니다.':'정답: '+esc(G.display||G.a)}</b><p>${esc(G.explain)}</p><button onclick="advanceQuiz()">${G.i===G.n-1?'결과 보기':'다음 문제'}</button></div>`:''}</section>`;
 }
 let memoryTimeout,pairTimeout;
@@ -114,13 +129,158 @@ const newsDeck=[
  {title:'분수 계산의 기본',tag:'수학',slides:[['분모가 같으면','1/5+2/5=3/5. 같은 크기의 조각을 합치는 것이므로 분자만 더합니다.'],['분모가 다르면 통분','1/2+1/3=3/6+2/6=5/6. 조각 크기를 먼저 같게 맞춥니다.'],['곱셈과 나눗셈','분수의 곱셈은 분자끼리, 분모끼리 곱합니다. 1/2÷2/3은 1/2×3/2=3/4입니다.']]}
 ];
 function startNews(index){G={m:'news',index,slide:0};render();}
-function newsHTML(){const d=newsDeck[G.index],slide=d.slides[G.slide];return gameBack()+sectionTitle('READ & REVIEW','한 장씩 개념 읽기')+`<div class="filter-row">${newsDeck.map((n,i)=>`<button class="${G.index===i?'selected':''}" onclick="startNews(${i})">${n.tag} · ${i+1}</button>`).join('')}</div><article class="news-card"><span class="eyebrow">${d.tag} / ${G.slide+1} OF ${d.slides.length}</span><h2>${d.title}</h2><div class="news-number">0${G.slide+1}</div><h3>${slide[0]}</h3><p>${slide[1]}</p><div class="news-controls"><button class="s" ${G.slide===0?'disabled':''} onclick="G.slide--;render()">이전</button><div>${d.slides.map((_,i)=>`<span class="${G.slide===i?'active':''}"></span>`).join('')}</div><button onclick="${G.slide<d.slides.length-1?'G.slide++;render()':"go('game')"}">${G.slide<d.slides.length-1?'다음':'읽기 완료'}</button></div></article><p class="lt">학습용 요약 콘텐츠입니다. 공부 방법은 개인과 과목에 따라 조절하세요.</p>`;}
+function newsHTML(){const d=newsDeck[G.index],slide=d.slides[G.slide];return gameBack()+sectionTitle('READ & REVIEW','한 장씩 개념 읽기')+`<div class="filter-row">${newsDeck.map((n,i)=>`<button class="${G.index===i?'selected':''}" onclick="startNews(${i})">${n.tag} · ${i+1}</button>`).join('')}</div><article class="news-card"><span class="eyebrow">${d.tag} / ${G.slide+1} OF ${d.slides.length}</span><h2>${d.title}</h2><h3>${slide[0]}</h3><p>${slide[1]}</p><div class="news-controls"><button class="s" ${G.slide===0?'disabled':''} onclick="G.slide--;render()">이전</button><div>${d.slides.map((_,i)=>`<span class="${G.slide===i?'active':''}"></span>`).join('')}</div><button onclick="${G.slide<d.slides.length-1?'G.slide++;render()':'startNewsQuiz()'}">${G.slide<d.slides.length-1?'다음':'응용 문제 풀기'}</button></div></article><p class="lt">학습용 요약 콘텐츠입니다. 공부 방법은 개인과 과목에 따라 조절하세요.</p>`;}
 const oldGame=V.game;
-V.game=function(){return G.m==='quiz'?quizHTML():G.m==='memory'?memoryHTML():G.m==='pairs'?pairsHTML():G.m==='news'?newsHTML():oldGame();};
+V.game=function(){return G.m==='quiz'?quizHTML():G.m==='memory'?memoryHTML():G.m==='pairs'?pairsHTML():G.m==='news'?newsHTML():G.m==='newsQuiz'?newsQuizHTML():oldGame();};
 const oldResult=result;
 result=function(){if(!G.recorded){G.recorded=true;recordGame(G.m==='hist'?'한국사 퀴즈':'암산',G.sc,G.n);}return oldResult();};
 const oldAn=V.an;
-V.an=function(){return sectionTitle('MY PLAN','내 속도에 맞는 계획')+oldAn();};
+V.an=function(){return sectionTitle('','공부 계획')+oldAn();};
 
 
-function growthIcon(type,level){return type==='tree'?`<svg width="38" height="42" viewBox="0 0 40 44" fill="none" aria-hidden="true"><path d="M20 39V19" stroke="#758e68" stroke-width="2.5"/><path d="M20 27C7 28 5 18 7 13c10 0 15 5 13 14Z" fill="#b9cda5"/><path d="M20 21c-2-10 4-15 14-15 0 9-4 15-14 15Z" fill="#78966b"/><path d="M11 40h18" stroke="#b89b76" stroke-width="3" stroke-linecap="round"/></svg>`:`<svg width="40" height="44" viewBox="0 0 40 44" fill="none" aria-hidden="true"><path d="M11 30c-7-10-2-24 7-25s15 14 13 24c-1 12-17 13-20 1Z" fill="#f5ddab" stroke="#d9bc80"/><circle cx="17" cy="20" r="1.5" fill="#645242"/><circle cx="26" cy="20" r="1.5" fill="#645242"/><path d="m19 25 3 3 3-3" fill="#d49a52"/></svg>`;}
+function growthIcon(type){return type==='tree'?`<svg width="38" height="42" viewBox="0 0 40 44" fill="none" aria-hidden="true"><path d="M20 39V19" stroke="#758e68" stroke-width="2.5"/><path d="M20 27C7 28 5 18 7 13c10 0 15 5 13 14Z" fill="#b9cda5"/><path d="M20 21c-2-10 4-15 14-15 0 9-4 15-14 15Z" fill="#78966b"/><path d="M11 40h18" stroke="#b89b76" stroke-width="3" stroke-linecap="round"/></svg>`:`<svg width="40" height="44" viewBox="0 0 40 44" fill="none" aria-hidden="true"><path d="M11 30c-7-10-2-24 7-25s15 14 13 24c-1 12-17 13-20 1Z" fill="#f5ddab" stroke="#d9bc80"/><circle cx="17" cy="20" r="1.5" fill="#645242"/><circle cx="26" cy="20" r="1.5" fill="#645242"/><path d="m19 25 3 3 3-3" fill="#d49a52"/></svg>`;}
+
+const REWARD_STEP = 200;
+const STUDY_STEP = 25 * 60;
+const totalStudySeconds = () => Object.values(D.logs).reduce((total, seconds) => total + seconds, 0);
+const rewardBadges = ['새싹 배지', '햇살 배지', '꽃잎 배지', '열매 배지'];
+const rewardName = level => rewardBadges[level - 1] || '정원사 배지 ' + level + '단계';
+
+function gardenHTML() {
+  const level = Math.floor(D.pts / REWARD_STEP);
+  return `<section class="card garden-card">
+    <div class="ct"><h2>나의 정원</h2><b>${D.pts.toLocaleString('ko-KR')}P</b></div>
+    <div class="growth-row"><span>${growthIcon(D.pet)}</span><div><b>${PETS[D.pet].t[stage()]}</b>
+    <p class="mu">${level ? '배지 ' + level + '개 획득 · ' + rewardName(level) : '첫 배지를 모아 보세요.'}</p></div>
+    <button class="s" onclick="setPet(D.pet==='tree'?'animal':'tree')">친구 바꾸기</button></div>
+    <progress value="${D.pts % REWARD_STEP}" max="${REWARD_STEP}" aria-label="다음 정원 배지까지 진행률"></progress>
+    <p class="mu">다음 보상 · ${rewardName(level + 1)}까지 ${REWARD_STEP - D.pts % REWARD_STEP}P</p>
+    <p class="lt">하루 첫 출석 +10P · 누적 공부 25분마다 +5P · 카드뉴스 정답 +5P</p>
+  </section>`;
+}
+
+function avatarArt() {
+  const hue = [...(accountUsername || cur)].reduce((hash, char) => (hash * 31 + char.codePointAt(0)) % 360, 0);
+  return `<svg viewBox="0 0 80 80" width="80" height="80" aria-hidden="true">
+    <rect width="80" height="80" rx="40" fill="hsl(${hue} 65% 90%)"/>
+    <circle cx="57" cy="24" r="7" fill="#fff9e7"/>
+    <path d="M0 65Q21 46 43 62T80 59V80H0Z" fill="hsl(${hue} 38% 78%)"/>
+    <path d="M40 55V30" stroke="#365740" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M40 44C24 46 18 34 20 28c11 0 20 5 20 16Z" fill="#709963"/>
+    <path d="M40 36c0-12 7-18 18-18 1 10-7 17-18 18Z" fill="#477754"/>
+    <path d="M29 52h22l-4 16H33Z" fill="#bd684e"/>
+    <rect x="27" y="50" width="26" height="5" rx="2" fill="#d78864"/>
+  </svg>`;
+}
+
+V.profile = function () {
+  return `<section class="card profile-card">
+    <div class="profile-art">${avatarArt()}</div>
+    <h1>${esc(cur)}</h1><p class="mu">${accountUsername ? '@' + esc(accountUsername) : '내 프로필'}</p>
+    <dl class="profile-stats">
+      <div><dt>출석</dt><dd>${D.att.length}일</dd></div>
+      <div><dt>공부 시간</dt><dd>${Math.floor(totalStudySeconds()/60)}분</dd></div>
+      <div><dt>식물 점수</dt><dd>${D.pts.toLocaleString('ko-KR')}P</dd></div>
+    </dl>
+    <h2>공부 과목</h2><ul class="subject-list">${subjectListHTML()}</ul>
+  </section>${gardenHTML()}
+  <section class="card account-panel"><div class="ct"><h2>내 계정과 기록</h2><span id="accountSync" class="mu">${esc(syncMessage)}</span></div><div class="row"><button class="s" onclick="downloadRecords()">기록 내려받기</button><button class="s" onclick="flushSave()">저장 재시도</button></div><div class="row"><button class="text-btn" onclick="importLegacy()">이 브라우저의 이전 기록 가져오기</button><button class="text-btn" onclick="openRecoverySettings()">복구 코드 발급</button><button class="text-btn" onclick="logout()">계정 전환 · 로그아웃</button></div><p class="lt">다른 기기에서는 같은 아이디로 로그인하세요. 동시 편집 충돌 시 덮어쓰지 않고 저장을 멈춥니다.</p></section>`;
+};
+
+function studyElapsed() {
+  return D.run ? Math.max(0, Math.floor((Date.now() - D.run.t) / 1000)) : 0;
+}
+
+function studyClock(seconds) {
+  return [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60]
+    .map(part => String(part).padStart(2, '0')).join(':');
+}
+
+function studyTimerHTML() {
+  return `<section class="card study-timer">
+    <div class="ct"><h2>공부 타이머</h2><span id="studyClock" class="record-time">${studyClock(studyElapsed())}</span></div>
+    <p class="mu">공부 기록을 저장하면 누적 25분마다 5P를 받아요.</p>
+    ${D.run ? `<div class="memo-entry timer-running"><b>${esc(D.run.s)}</b><button onclick="stopStudy()">종료하고 기록</button></div>` :
+    `<form class="memo-entry" onsubmit="event.preventDefault();startStudy()">
+      <select id="studySubject" aria-label="공부할 과목">${D.subs.map(subject => `<option>${esc(subject)}</option>`).join('')}</select>
+      <button>공부 시작</button>
+    </form>`}
+  </section>`;
+}
+
+function startStudy() {
+  const subject = $('#studySubject')?.value;
+  if (D.run || !D.subs.includes(subject)) return;
+  D.run = {s:subject, t:Date.now()};
+  save();
+  render();
+}
+
+function stopStudy() {
+  if (!D.run) return;
+  const {s:subject} = D.run;
+  const elapsed = studyElapsed();
+  const before = totalStudySeconds();
+  const prior = Object.hasOwn(D.logs, subject) ? D.logs[subject] : 0;
+  D.logs = {...D.logs, [subject]: prior + elapsed};
+  D.run = null;
+  const points = (Math.floor((before + elapsed) / STUDY_STEP) - Math.floor(before / STUDY_STEP)) * 5;
+  add(points);
+  render();
+  toast(points ? `공부 기록을 저장했어요. +${points}P` : '공부 기록을 저장했어요.');
+}
+
+setInterval(() => {
+  const clock = $('#studyClock');
+  if (clock && D?.run) clock.textContent = studyClock(studyElapsed());
+}, 1000);
+
+
+const newsQuestions = [
+  ['이틀 뒤 시험이다. 오답을 분류해 보니 6문제는 개념을 혼동했고, 4문제는 같은 부호 실수였다. 어떤 복습 계획이 두 원인을 모두 확인하기 좋은가?',
+    ['해설 10개를 읽고 다음 날 새로운 단원을 공부한다', '개념은 차이를 설명해 보고, 부호 실수는 검산 기준을 만든 뒤 다음 날 답을 가리고 다시 푼다', '맞힌 문제만 다시 풀면서 풀이 속도를 높인다', '오답의 풀이를 공책에 옮기고 시험 직전에 읽는다'], 1,
+    '틀린 원인별로 방법을 바꾸고, 시간을 두고 도움 없이 다시 풀어야 같은 실수가 줄었는지 확인할 수 있어요.'],
+  ['정가에서 20% 할인한 뒤 할인된 가격에서 다시 15%를 깎아 40,800원이 되었다. 정가와 전체 할인율은?',
+    ['60,000원 · 32%', '60,000원 · 35%', '58,000원 · 30%', '62,000원 · 34%'], 0,
+    '남는 비율은 0.8 × 0.85 = 0.68입니다. 40,800원을 0.68로 나누면 정가 60,000원이고, 전체 할인율은 32%예요.'],
+  ['영단어의 뜻을 보면 알아보지만, 한국어 문장을 영어로 바꿀 때 그 단어가 떠오르지 않는다. 어떤 연습이 이 문제를 직접 확인할 수 있는가?',
+    ['영어 단어를 보면서 한국어 뜻을 읽는다', '틀린 문장을 정답과 함께 여러 번 베낀다', '한국어 상황만 보고 영어 단어를 떠올려 문장을 만든 뒤, 예문과 비교하고 다음 날 다시 해 본다', '이미 외운 단어를 영어 철자 순서로 정렬한다'], 2,
+    '실제 과제와 같은 방향으로 단어를 꺼내고 문장에 써 보면, 뜻을 알아보는 능력과 문장에 쓰는 능력을 구분할 수 있어요.'],
+  ['25분 공부를 세 번 해 보니 알림이 없어도 목표를 끝내지 못했다. 매번 첫 12분을 문제 고르는 데 썼다면 어떤 변경부터 시험해 볼까?',
+    ['타이머를 50분으로 바꾸고 같은 방식으로 시작한다', '전날 오답 3개를 골라 두고, 같은 25분 동안 완료한 개수를 기록해 비교한다', '매번 그날 기분에 따라 과목을 바꾼다', '타이머와 기록을 모두 없애고 더 오래 앉아 있는다'], 1,
+    '먼저 시간을 잡아먹는 과정을 줄이고, 같은 공부 시간에 결과가 달라지는지 비교하면 어떤 변경이 도움이 됐는지 알 수 있어요.'],
+  ['물통에 물이 3/4만큼 차 있다. 들어 있는 물의 2/5를 쓰고 나서 물통 전체 용량의 1/6만큼 다시 채웠다. 지금 물통은 얼마나 차 있는가?',
+    ['31/60', '7/15', '37/60', '47/60'], 2,
+    '남은 물은 전체의 3/4 × 3/5 = 9/20입니다. 채운 물 1/6을 더하면 27/60 + 10/60 = 37/60이에요.'],
+];
+
+function startNewsQuiz() {
+  const [question, options, correct, explanation] = newsQuestions[G.index];
+  G = {m:'newsQuiz', index:G.index, question, options:shuffled(options), answer:options[correct], explanation};
+  render();
+}
+
+function answerNews(index) {
+  if (G.m !== 'newsQuiz' || G.answered || !G.options[index]) return;
+  G.answered = true;
+  G.correct = G.options[index] === G.answer;
+  if (G.correct) add(5);
+  recordGame(newsDeck[G.index].title + ' · 응용 문제', Number(G.correct), 1);
+  render();
+}
+
+function newsQuizHTML() {
+  return gameBack() + sectionTitle('', newsDeck[G.index].title) + `<section class="card quiz-card">
+    <p class="mu">응용 문제 · 정답 +5P</p>
+    <h2 class="quiz-question">${esc(G.question)}</h2>
+    <div class="quiz-options">${G.options.map((option, index) =>
+      `<button ${G.answered ? 'disabled' : ''} class="${G.answered && option === G.answer ? 'correct' : ''}" onclick="answerNews(${index})">${esc(option)}</button>`
+    ).join('')}</div>
+    ${G.answered ? `<div class="answer-feedback ${G.correct ? 'correct' : 'incorrect'}" role="status">
+      <b>${G.correct ? '정답이에요! +5P' : '정답 · ' + esc(G.answer)}</b><p>${esc(G.explanation)}</p>
+      <button onclick="startNews(${(G.index + 1) % newsDeck.length})">다른 카드뉴스 읽기</button>
+    </div>` : ''}
+  </section>`;
+}
+
+boot();

@@ -18,7 +18,7 @@ let U = {},
   G = { m: "" };
 const tabSessionKey = 'ssuksuk.tab-session';
 let csrf = '', revision = 0, saveTimer, savePending = false, saving = false, conflict = false;
-let syncMessage = '연결 중', authMode = 'login';
+let syncMessage = '연결 중', authMode = 'login', accountUsername = '';
 const save = () => {
   if (!D || !cur) return;
   savePending = true;
@@ -194,6 +194,7 @@ async function api(path, options = {}) {
   return data;
 }
 function loadAccount(account) {
+  accountUsername=account.username || '';
   cur=account.name; csrf=account.csrf;revision=account.revision;D=account.state;
   try { sessionStorage.setItem(tabSessionKey, csrf); } catch {}
   if (typeof account.username === 'string') {
@@ -201,7 +202,7 @@ function loadAccount(account) {
   }
   U={};U[cur]={d:D};D.notes ||= [];D.gameHistory ||= [];
   savePending=false;conflict=false;syncMessage='서버 저장됨';
-  if(!D.att.includes(today())){D.att.push(today());D.pts+=10;save();}
+  if(!D.att.includes(today())){D.att.push(today());add(10);}
   render();
 }
 async function login() {
@@ -289,10 +290,10 @@ const V = {
     const t = D.traits,
       x = D.tests,
       e = D.exam;
-    return `${coachHTML()}${linksHTML()}<div class="card"><div class="row"><input id="ns" placeholder="과목 추가 (예: 한국사)" style="margin:0"><button style="flex:0 0 auto" onclick="addSub()">추가</button></div></div><div class="card"><h3>2. 내 학습 정보</h3><label>공부 습관<input id="th" value="${esc(t.habit)}" placeholder="예: 밤에 집중이 잘 돼요"></label><label>잘하는 과목<input id="tg" value="${esc(t.good)}"></label><label>부족한 과목<input id="tw" value="${esc(t.weak)}"></label></div>
- <div class="card"><h3>3. 테스트 결과 입력</h3><p class="mu" style="margin:0 0 8px">위 사이트에서 해 본 결과를 100점 기준으로 적어 주세요.</p><div class="row"><label>암기력<input id="t1" type="number" min="0" max="100" value="${x.mem}"></label><label>문제풀이<input id="t2" type="number" min="0" max="100" value="${x.sol}"></label><label>사고력<input id="t3" type="number" min="0" max="100" value="${x.thk}"></label></div><p class="lt">사이트 결과가 점수가 아니면 아래에 적어도 돼요 (선택)</p><div class="row"><label>숫자 기억 (자리수)<input id="s1" type="number" min="1" max="30" value="${x.hn || ""}"></label><label>시각 기억 (레벨)<input id="s2" type="number" min="1" max="40" value="${x.hv || ""}"></label></div><div class="row"><label>칸 아카데미 단계<select id="s3"><option value="">선택 안 함</option>${["시도함", "익숙함", "능숙함", "마스터"].map((o, i) => `<option value="${i}" ${x.kh === String(i) ? "selected" : ""}>${o}</option>`).join("")}</select></label><label>커리어넷 수리·논리 (백분위)<input id="s4" type="number" min="1" max="100" value="${x.cn || ""}"></label></div></div>
- <div class="card"><h3>4. 시험 일정</h3><div class="row"><label>시험 날짜<input id="ed" type="date" value="${e.date}"></label><label>하루 공부 시간(시간)<input id="eh" type="number" min="1" max="12" value="${e.hrs}"></label></div><button class="w" onclick="analyze()">분석하고 계획 만들기</button></div>
- ${D.report || ""}${D.plan.length ? `<div class="card"><h3>기본 공부 계획</h3><p class="mu">입력한 시험 일정과 공부 시간에 맞춘 기본 계획이에요. 완료하면 5P를 받아요.</p>${D.plan.map((p, i) => `<label class="chk"><input type="checkbox" ${p.d ? "checked disabled" : ""} onchange="donePlan(${i})"><span>${esc(p.t)}${p.w ? `<small class="mu" style="display:block">${esc(p.w)}</small>` : ""}</span></label>`).join("")}</div>` : ""}<div class="card"><div class="ct"><h3>AI 맞춤 공부 계획</h3><span class="mu">내 정보 기반</span></div><p class="mu">자기평가, 외부 테스트 결과, 공부 기록, 시험 날짜를 함께 참고해 계획을 구체화해요.</p><button class="w" id="aiPlanBtn" onclick="generateAIPlan()">${D.aiPlanText ? "AI 계획 다시 만들기" : "AI로 맞춤 계획 생성"}</button><p id="aiPlanStatus" class="mu" style="margin-top:10px"></p>${D.aiPlanText ? `<div class="ai-plan-text">${esc(D.aiPlanText).replace(/\n/g, "<br>")}</div>` : ""}</div><div class="card" style="padding:4px 18px"><button class="lk" style="width:100%;background:none;border-radius:0;padding:14px 0;text-align:left;color:var(--tx);font-weight:400;border-top:0" onclick="go('ai')"><span><b>AI 학습 도우미와 대화하기</b><small>계획을 바꾸거나 공부법을 더 물어볼 수 있어요</small></span>${svg("chev", 18)}</button></div>`;
+    return `<section class="card"><h2>공부 과목</h2><ul class="subject-list" id="subjectList">${subjectListHTML()}</ul><form class="memo-entry" onsubmit="event.preventDefault();addSub()"><input id="ns" maxlength="80" required aria-label="새 과목 이름" placeholder="예: 한국사"><button>과목 추가</button></form><p class="mu" id="subjectStatus" role="status"></p></section><form onsubmit="event.preventDefault();analyze()"><div class="card"><h2>내 학습 정보</h2><label>공부 습관<input id="th" value="${esc(t.habit)}" placeholder="예: 밤에 집중이 잘 돼요"></label><label>잘하는 과목<input id="tg" value="${esc(t.good)}"></label><label>부족한 과목<input id="tw" value="${esc(t.weak)}"></label></div>
+ <details class="card plan-details" ontoggle="if(this.isConnected) planTestsOpen=this.open" ${planTestsOpen?"open":""}><summary>테스트 결과 입력 <small class="mu">선택</small></summary>${linksHTML()}<p class="mu" style="margin:0 0 8px">위 사이트에서 해 본 결과를 100점 기준으로 적어 주세요.</p><div class="row"><label>암기력<input id="t1" type="number" min="0" max="100" value="${x.mem}"></label><label>문제풀이<input id="t2" type="number" min="0" max="100" value="${x.sol}"></label><label>사고력<input id="t3" type="number" min="0" max="100" value="${x.thk}"></label></div><p class="lt">사이트 결과가 점수가 아니면 아래에 적어도 돼요 (선택)</p><div class="row"><label>숫자 기억 (자리수)<input id="s1" type="number" min="1" max="30" value="${x.hn || ""}"></label><label>시각 기억 (레벨)<input id="s2" type="number" min="1" max="40" value="${x.hv || ""}"></label></div><div class="row"><label>칸 아카데미 단계<select id="s3"><option value="">선택 안 함</option>${["시도함", "익숙함", "능숙함", "마스터"].map((o, i) => `<option value="${i}" ${x.kh === String(i) ? "selected" : ""}>${o}</option>`).join("")}</select></label><label>커리어넷 수리·논리 (백분위)<input id="s4" type="number" min="1" max="100" value="${x.cn || ""}"></label></div></details>
+ <div class="card"><h2>시험 일정</h2><div class="row"><label>시험 날짜<input id="ed" type="date" value="${e.date}"></label><label>하루 공부 시간(시간)<input id="eh" type="number" min="1" max="12" value="${e.hrs}"></label></div><button class="w">분석하고 계획 만들기</button></div></form>
+ ${D.report || ""}${D.plan.length ? `<div class="card"><h3>기본 공부 계획</h3><p class="mu">입력한 시험 일정과 공부 시간에 맞춘 기본 계획이에요. 완료하면 5P를 받아요.</p>${D.plan.map((p, i) => `<label class="chk"><input type="checkbox" ${p.d ? "checked disabled" : ""} onchange="donePlan(${i})"><span>${esc(p.t)}${p.w ? `<small class="mu" style="display:block">${esc(p.w)}</small>` : ""}</span></label>`).join("")}</div>` : ""}`;
   },
   game() {
     if (G.m == "math") return gMath();
@@ -348,13 +349,25 @@ const setPet = (k) => {
   render();
 };
 
+let planTestsOpen = false;
+
+function subjectListHTML() {
+  return D.subs.map(name => `<li>${esc(name)}</li>`).join("");
+}
+
 function addSub() {
-  const v = $("#ns").value.trim();
-  if (v && !D.subs.includes(v)) {
-    D.subs.push(v);
-    save();
-    render();
-  }
+  const input = $("#ns");
+  const status = $("#subjectStatus");
+  const name = input.value.trim();
+  if (!name) { status.textContent = "과목 이름을 입력해 주세요."; return; }
+  if (D.subs.includes(name)) { status.textContent = "이미 추가한 과목이에요."; return; }
+  if (D.subs.length >= 2000) { status.textContent = "등록 가능한 과목 수를 모두 사용했어요."; return; }
+  D.subs.push(name);
+  save();
+  $("#subjectList").innerHTML = subjectListHTML();
+  input.value = "";
+  status.textContent = name + " 과목을 추가했어요.";
+  input.focus();
 }
 
 /* 분석 및 계획 */
@@ -972,26 +985,21 @@ let AI = { v: "chat", cur: null, busy: 0, ctl: null };
 const aiSet = () => { D.ai = D.ai || { study: true, tier: "default" }; D.ai.eng = "api"; return D.ai; };
 const chats = () => (D.chats = D.chats || []);
 const curChat = () => chats().find((c) => c.id == AI.cur);
-function coachHTML() {
-  // 분석 버튼을 실제로 눌러 분석이 완료된 경우에만 완료 문구를 표시해요.
-  const has = D.analysisDone === true;
-  return `<div class="coach"><div class="ch"><span class="av big">${svg("spark", 22)}</span><div><b>스터디 AI</b><em class="pill">AI</em><br><small>공부 분석과 계획을 도와줘요</small></div></div><div class="bub cb">${has ? "분석이 끝났어요. 요약해 드릴게요.\n" + esc(D.sum || "") : '안녕하세요, 저는 스터디 AI예요. 아래에 테스트 결과를 입력하고 "분석하고 계획 만들기"를 누르면 공부법과 날짜별 계획을 짜 드려요.'}</div><div class="chips" style="justify-content:flex-start;margin:10px 0">${["암기 잘하는 법", "내 약점이 뭐야?", "오늘 뭐부터 해?"].map((q) => `<button class="chip2" data-q="${q}" onclick="coachAsk(this.dataset.q)">${q}</button>`).join("")}</div><div class="ask"><input id="kq" aria-label="질문 입력" placeholder="무엇이든 물어보세요" onkeydown="if(event.key=='Enter'&&!event.isComposing)coachAsk()"><button class="send" aria-label="보내기" onclick="coachAsk()">${svg("send", 20)}</button></div></div>`;
-}
-function coachAsk(t) {
-  const el = $("#kq");
-  t = (t || (el ? el.value : "")).trim();
-  if (!t) return;
-  tab = "ai";
-  AI.v = "chat";
-  AI.cur = null;
-  aiSend(t);
+function aiPlanHTML() {
+  return `<details class="card plan-details" ${D.aiPlanText ? "open" : ""}>
+    <summary>AI 맞춤 공부 계획</summary>
+    <p class="mu">계획 탭에서 분석을 마친 뒤, 학습 정보에 맞춰 계획을 구체화할 수 있어요.</p>
+    <button id="aiPlanBtn" onclick="generateAIPlan()">${D.aiPlanText ? "AI 계획 다시 만들기" : "AI 계획 만들기"}</button>
+    <p id="aiPlanStatus" class="mu" role="status"></p>
+    ${D.aiPlanText ? `<div class="ai-plan-text">${esc(D.aiPlanText)}</div>` : ""}
+  </details>`;
 }
 function aiPage() {
   const s = aiSet(),
     top = `<div class="aih"><b>물어보세요</b><span><button class="s" onclick="go('an')">스케줄</button> <button class="s" onclick="aiView('hist')">기록</button> <button class="s" onclick="aiNew()">새 대화</button></span></div>`;
   if (AI.v == "hist") return top + histHTML();
   return (
-    top +
+    top + aiPlanHTML() +
     `<div class="card aiset"><label class="sw"><span><b>공부 모드</b><small>${s.study ? "공부 관련 질문에만 답해요" : "제한 없이 자유롭게 대화해요"}</small></span><input type="checkbox" role="switch" aria-label="공부 모드" ${s.study ? "checked" : ""} onchange="aiSet().study=this.checked;save();render()"></label><label class="sw"><span><b>답변 방식</b><small>설명 길이를 선택하세요</small></span><select onchange="aiSet().tier=this.value;save()">${[
       ["quick", "짧게"],
       ["default", "기본"],
@@ -1508,7 +1516,7 @@ function delCard(k) {
   save();
   render();
 }
-boot();
+
 
 /* ===== JavaScript 기능 끝 ===== */
 
